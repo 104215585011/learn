@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+floatvocab.db
+*.db-wal
+*.db-shm
