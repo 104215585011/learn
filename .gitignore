@@ -3,3 +3,6 @@ __pycache__/
 floatvocab.db
 *.db-wal
 *.db-shm
+build/
+dist/
+*.spec
