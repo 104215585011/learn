@@ -1,4 +1,4 @@
-import csv
+﻿import csv
 import ctypes
 import ctypes.wintypes
 import json
@@ -8,11 +8,12 @@ import sqlite3
 import sys
 import threading
 import tkinter as tk
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from floatvocab.db import initialize_database, open_connection
+from floatvocab.models import WordCard
 import news_digest
 from example_pipeline import enrich_database
 
@@ -65,167 +66,18 @@ THEME = {
 }
 
 
-@dataclass
-class WordCard:
-    id: int
-    word: str
-    phonetic: str
-    meaning: str
-    example: str
-    status: str
-    lexicon_name: str
-
-
 class FloatVocabDB:
     def __init__(self, db_path: Path):
-        self.conn = sqlite3.connect(db_path)
-        self.conn.row_factory = sqlite3.Row
-        self.init_schema()
-        news_digest.ensure_schema(self.conn)
-        self.seed_builtin()
-        self.seed_exam_lexicons()
-
-    def init_schema(self):
-        self.conn.executescript(
-            """
-            PRAGMA journal_mode=WAL;
-
-            CREATE TABLE IF NOT EXISTS lexicons (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL UNIQUE,
-              source TEXT NOT NULL DEFAULT 'built-in',
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS words (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              lexicon_id INTEGER NOT NULL,
-              word TEXT NOT NULL,
-              phonetic TEXT DEFAULT '',
-              meaning TEXT NOT NULL,
-              example TEXT DEFAULT '',
-              example_source TEXT DEFAULT '',
-              example_updated_at TEXT,
-              example_attempted_at TEXT,
-              example_attempts INTEGER NOT NULL DEFAULT 0,
-              status TEXT NOT NULL DEFAULT 'new',
-              next_review_date TEXT NOT NULL,
-              interval_days INTEGER NOT NULL DEFAULT 0,
-              repetitions INTEGER NOT NULL DEFAULT 0,
-              ease_factor REAL NOT NULL DEFAULT 2.5,
-              seen_count INTEGER NOT NULL DEFAULT 0,
-              correct_count INTEGER NOT NULL DEFAULT 0,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              UNIQUE(lexicon_id, word),
-              FOREIGN KEY (lexicon_id) REFERENCES lexicons(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS plans (
-              id INTEGER PRIMARY KEY CHECK (id = 1),
-              lexicon_id INTEGER,
-              daily_new INTEGER NOT NULL DEFAULT 20,
-              target_date TEXT,
-              float_alpha REAL NOT NULL DEFAULT 0.88,
-              font_size INTEGER NOT NULL DEFAULT 26,
-              bg_color TEXT NOT NULL DEFAULT '#F7FAF5',
-              widget_size TEXT NOT NULL DEFAULT 'medium',
-              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (lexicon_id) REFERENCES lexicons(id) ON DELETE SET NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS reviews (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              word_id INTEGER NOT NULL,
-              rating INTEGER NOT NULL,
-              old_interval_days INTEGER NOT NULL,
-              new_interval_days INTEGER NOT NULL,
-              reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS daily_stats (
-              day TEXT PRIMARY KEY,
-              reviewed INTEGER NOT NULL DEFAULT 0,
-              known INTEGER NOT NULL DEFAULT 0,
-              unknown INTEGER NOT NULL DEFAULT 0,
-              new_seen INTEGER NOT NULL DEFAULT 0
-            );
-            """
+        self.conn = open_connection(db_path)
+        initialize_database(
+            self.conn,
+            builtin_lexicon=BUILTIN_LEXICON,
+            vocab_source_dir=VOCAB_SOURCE_DIR,
+            exam_lexicons=EXAM_LEXICONS,
+            qwerty_item_to_word=qwerty_item_to_word,
         )
-        self.ensure_plan_columns()
-        self.ensure_word_columns()
-        self.conn.execute(
-            "INSERT OR IGNORE INTO plans (id, lexicon_id, daily_new, target_date) VALUES (1, NULL, 20, ?)",
-            [(date.today() + timedelta(days=90)).isoformat()],
-        )
-        self.conn.commit()
 
-    def ensure_plan_columns(self):
-        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(plans)").fetchall()}
-        if "widget_size" not in columns:
-            self.conn.execute("ALTER TABLE plans ADD COLUMN widget_size TEXT NOT NULL DEFAULT 'medium'")
-        if "current_word_id" not in columns:
-            self.conn.execute("ALTER TABLE plans ADD COLUMN current_word_id INTEGER")
-
-    def ensure_word_columns(self):
-        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(words)").fetchall()}
-        if "example_source" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_source TEXT DEFAULT ''")
-        if "example_updated_at" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_updated_at TEXT")
-        if "example_attempted_at" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_attempted_at TEXT")
-        if "example_attempts" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_attempts INTEGER NOT NULL DEFAULT 0")
-
-    def seed_builtin(self):
-        if self.conn.execute("SELECT 1 FROM lexicons WHERE name = ?", ("考研核心 50",)).fetchone():
-            return
-        with BUILTIN_LEXICON.open("r", encoding="utf-8") as file:
-            words = json.load(file)
-        lexicon_id = self.create_lexicon("考研核心 50", "built-in")
-        today = date.today().isoformat()
-        for item in words:
-            self.conn.execute(
-                """
-                INSERT OR IGNORE INTO words
-                (lexicon_id, word, phonetic, meaning, example, next_review_date)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (lexicon_id, item["word"], item.get("phonetic", ""), item["meaning"], item.get("example", ""), today),
-            )
-        self.conn.execute("UPDATE plans SET lexicon_id = ? WHERE id = 1 AND lexicon_id IS NULL", (lexicon_id,))
-        self.conn.commit()
-
-    def seed_exam_lexicons(self):
-        if not VOCAB_SOURCE_DIR.exists():
-            return
-        today = date.today().isoformat()
-        for lexicon_name, file_name in EXAM_LEXICONS:
-            if self.conn.execute("SELECT 1 FROM lexicons WHERE name = ?", (lexicon_name,)).fetchone():
-                continue
-            source_path = VOCAB_SOURCE_DIR / file_name
-            if not source_path.exists():
-                continue
-            with source_path.open("r", encoding="utf-8") as file:
-                rows = json.load(file)
-            lexicon_id = self.create_lexicon(lexicon_name, "built-in")
-            for item in rows:
-                row = qwerty_item_to_word(item, lexicon_name)
-                if not row:
-                    continue
-                self.conn.execute(
-                    """
-                    INSERT OR IGNORE INTO words
-                    (lexicon_id, word, phonetic, meaning, example, next_review_date)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (lexicon_id, row["word"], row["phonetic"], row["meaning"], row["example"], today),
-                )
-        self.conn.commit()
-
-    def create_lexicon(self, name: str, source: str = "custom") -> int:
+    def create_lexicon(self, name: str, source: str = 'custom') -> int:
         cursor = self.conn.execute("INSERT OR IGNORE INTO lexicons (name, source) VALUES (?, ?)", (name, source))
         self.conn.commit()
         if cursor.lastrowid:
@@ -1509,3 +1361,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
