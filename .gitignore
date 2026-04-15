@@ -6,3 +6,4 @@ floatvocab.db
 build/
 dist/
 *.spec
+.worktrees/
