@@ -15,7 +15,8 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from floatvocab.db import initialize_database, open_connection
 from floatvocab.models import WordCard
 from floatvocab.repositories import LexiconRepository, NewsRepository, PlanRepository, StudyRepository
-from floatvocab.services import SettingsService, StudyService
+from floatvocab.services import EnrichmentService as _BaseEnrichmentService
+from floatvocab.services import NewsService, SettingsService, StudyService
 import news_digest
 from example_pipeline import enrich_database
 
@@ -46,6 +47,14 @@ EXAM_LEXICONS = [
 STATUS_NEW = "new"
 STATUS_FUZZY = "fuzzy"
 STATUS_MASTERED = "mastered"
+
+
+class EnrichmentService(_BaseEnrichmentService):
+    def __init__(self, db_path: Path):
+        super().__init__(db_path)
+
+    def enrich_examples(self, lexicon_id=None, limit: int = 200, refresh: bool = False):
+        return globals()["enrich_database"](self.db_path, limit=limit, refresh=refresh, lexicon_id=lexicon_id)
 
 THEME = {
     "bg": "#F3F8FE",
