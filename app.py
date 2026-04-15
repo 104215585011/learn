@@ -15,6 +15,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from floatvocab.db import initialize_database, open_connection
 from floatvocab.models import WordCard
 from floatvocab.repositories import LexiconRepository, NewsRepository, PlanRepository, StudyRepository
+from floatvocab.services import SettingsService, StudyService
 import news_digest
 from example_pipeline import enrich_database
 
