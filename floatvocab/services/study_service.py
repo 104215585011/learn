@@ -16,3 +16,6 @@ class StudyService:
 
     def get_recent_words(self, lexicon_id: int, limit: int = 80):
         return self.db.recent_words(lexicon_id, limit)
+
+    def missing_examples_count(self, lexicon_id: int | None = None):
+        return self.db.missing_examples_count(lexicon_id)

@@ -4,7 +4,6 @@ import ctypes.wintypes
 import json
 import os
 import queue
-import sqlite3
 import sys
 import threading
 import tkinter as tk
@@ -79,6 +78,7 @@ THEME = {
 
 class FloatVocabDB:
     def __init__(self, db_path: Path):
+        self.db_path = db_path
         self.conn = open_connection(db_path)
         initialize_database(
             self.conn,
@@ -289,7 +289,7 @@ class FloatingWindow(tk.Toplevel):
         self.resize_grip.bind("<B1-Motion>", self.resize)
 
     def apply_style(self):
-        plan = self.app.db.plan()
+        plan = self.app.settings_service.get_plan_settings()
         bg = plan["bg_color"]
         alpha = float(plan["float_alpha"])
         font_size = int(plan["font_size"])
@@ -342,7 +342,7 @@ class FloatingWindow(tk.Toplevel):
         self.detail_label.configure(font=("Segoe UI", max(11, font_size // 2)))
 
     def show_next(self):
-        self.card = self.app.db.next_card()
+        self.card = self.app.study_service.get_next_card()
         self.flipped = False
         self.apply_style()
         self.render()
@@ -427,13 +427,13 @@ class FloatingWindow(tk.Toplevel):
 
     def mark_known(self):
         if self.card:
-            self.app.db.review(self.card.id, 4)
+            self.app.study_service.submit_review(self.card.id, 4)
         self.app.refresh_all()
         self.show_next()
 
     def mark_unknown(self):
         if self.card:
-            self.app.db.review(self.card.id, 2)
+            self.app.study_service.submit_review(self.card.id, 2)
         self.app.refresh_all()
         self.show_next()
 
@@ -584,8 +584,20 @@ class GlobalHotkeys:
 
 
 class FloatVocabApp:
-    def __init__(self):
-        self.db = FloatVocabDB(DB_PATH)
+    def __init__(
+        self,
+        db: FloatVocabDB | None = None,
+        settings_service: SettingsService | None = None,
+        study_service: StudyService | None = None,
+        news_service: NewsService | None = None,
+        enrichment_service: EnrichmentService | None = None,
+    ):
+        self.db = db or FloatVocabDB(DB_PATH)
+        self.settings_service = settings_service or SettingsService(self.db)
+        self.study_service = study_service or StudyService(self.db)
+        service_db_path = getattr(self.db, "db_path", DB_PATH)
+        self.news_service = news_service or NewsService(service_db_path)
+        self.enrichment_service = enrichment_service or EnrichmentService(service_db_path)
         self.root = tk.Tk()
         self.configure_root()
         self.hotkey_events = queue.Queue()
@@ -928,7 +940,7 @@ class FloatVocabApp:
         self.lexicons = self.db.lexicons()
         values = [f"{row['id']} · {row['name']} ({row['mastered'] or 0}/{row['total'] or 0})" for row in self.lexicons]
         self.lexicon_combo["values"] = values
-        plan = self.db.plan()
+        plan = self.settings_service.get_plan_settings()
         self.loading_plan = True
         for index, row in enumerate(self.lexicons):
             if row["id"] == plan["lexicon_id"]:
@@ -957,7 +969,7 @@ class FloatVocabApp:
         except ValueError:
             messagebox.showwarning(APP_NAME, "目标日期格式应为 YYYY-MM-DD。")
             return
-        self.db.save_plan(
+        self.settings_service.save_plan(
             lexicon_id,
             int(self.daily_new_var.get()),
             target_date,
@@ -981,7 +993,7 @@ class FloatVocabApp:
         bg_color = self.bg_color_var.get().strip() or "#F7FAF5"
         if not self.valid_tk_color(bg_color):
             return
-        self.db.save_float_style(
+        self.settings_service.save_float_style(
             float(self.alpha_var.get()),
             int(self.font_size_var.get()),
             bg_color,
@@ -1013,17 +1025,17 @@ class FloatVocabApp:
         self.refresh_all()
 
     def refresh_example_status(self):
-        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
-        missing = self.db.missing_examples_count(lexicon_id)
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
+        missing = self.study_service.missing_examples_count(lexicon_id)
         self.example_status_label.configure(text=f"当前词库还缺 {missing} 条例句")
 
     def enrich_examples(self):
-        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
         self.example_status_label.configure(text="正在补全例句...")
 
         def worker():
             try:
-                result = enrich_database(DB_PATH, limit=200, refresh=False, lexicon_id=lexicon_id)
+                result = self.enrichment_service.enrich_examples(lexicon_id=lexicon_id, limit=200, refresh=False)
             except Exception as exc:
                 error_message = f"例句补全失败：{exc}"
                 self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1047,7 +1059,7 @@ class FloatVocabApp:
             self.bg_color_var.set(color)
 
     def refresh_stats(self):
-        stats = self.db.stats()
+        stats = self.study_service.get_study_stats()
         if not stats:
             return
         summary = stats["summary"]
@@ -1088,13 +1100,10 @@ class FloatVocabApp:
     def refresh_words(self):
         for item in self.words_tree.get_children():
             self.words_tree.delete(item)
-        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
         if not lexicon_id:
             return
-        rows = self.db.conn.execute(
-            "SELECT word, meaning, status FROM words WHERE lexicon_id = ? ORDER BY updated_at DESC, id LIMIT 80",
-            (lexicon_id,),
-        ).fetchall()
+        rows = self.study_service.get_recent_words(lexicon_id, limit=80)
         for row in rows:
             self.words_tree.insert("", "end", values=(row["word"], row["meaning"], status_text(row["status"])))
 
@@ -1103,9 +1112,7 @@ class FloatVocabApp:
 
     def _refresh_daily_briefs_worker(self):
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.row_factory = sqlite3.Row
-                news_digest.refresh_latest_briefs(conn, limit=10)
+            self.news_service.refresh_latest_briefs(limit=10)
         except Exception as exc:
             error_message = f"刷新日报失败：{exc}"
             self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1117,7 +1124,7 @@ class FloatVocabApp:
             return
         for item in self.brief_tree.get_children():
             self.brief_tree.delete(item)
-        rows = news_digest.latest_briefs(self.db.conn, limit=10)
+        rows = self.news_service.list_latest_briefs(limit=10)
         for row in rows:
             published = (row["published_at"] or "")[:16].replace("T", " ")
             saved_tag = " 已收藏" if row["saved"] else ""
@@ -1133,7 +1140,7 @@ class FloatVocabApp:
         if not brief_id:
             self.update_text_widget(self.brief_summary, "")
             return
-        row = self.db.conn.execute("SELECT * FROM daily_briefs WHERE id = ?", (brief_id,)).fetchone()
+        row = self.news_service.get_brief(brief_id)
         if not row:
             self.update_text_widget(self.brief_summary, "")
             return
@@ -1150,9 +1157,7 @@ class FloatVocabApp:
 
     def _save_selected_brief_worker(self, brief_id: int):
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.row_factory = sqlite3.Row
-                news_digest.save_brief_to_favorites(conn, brief_id)
+            self.news_service.save_brief_to_favorites(brief_id)
         except Exception as exc:
             error_message = f"收藏日报失败：{exc}"
             self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1169,7 +1174,7 @@ class FloatVocabApp:
             return
         for item in self.favorite_tree.get_children():
             self.favorite_tree.delete(item)
-        rows = news_digest.favorite_articles(self.db.conn)
+        rows = self.news_service.list_favorite_articles()
         for row in rows:
             saved = (row["saved_at"] or "")[:16].replace("T", " ")
             self.favorite_tree.insert("", "end", iid=str(row["id"]), values=(row["source_name"], saved, row["title"]))
@@ -1178,7 +1183,7 @@ class FloatVocabApp:
         selection = self.favorite_tree.selection()
         if not selection:
             return
-        article = news_digest.favorite_article_by_id(self.db.conn, int(selection[0]))
+        article = self.news_service.get_favorite_article(int(selection[0]))
         if article:
             self.article_window.show_article(article)
 

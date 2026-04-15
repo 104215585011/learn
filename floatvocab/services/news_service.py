@@ -41,6 +41,12 @@ class NewsService:
                 conn.row_factory = sqlite3.Row
             return self.news_digest.favorite_article_by_id(conn, article_id)
 
+    def get_brief(self, brief_id: int):
+        with self.connection_factory(self.db_path) as conn:
+            if hasattr(conn, "row_factory"):
+                conn.row_factory = sqlite3.Row
+            return conn.execute("SELECT * FROM daily_briefs WHERE id = ?", (brief_id,)).fetchone()
+
     def save_brief_to_favorites(self, brief_id: int):
         with self.connection_factory(self.db_path) as conn:
             if hasattr(conn, "row_factory"):
