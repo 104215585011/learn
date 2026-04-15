@@ -14,6 +14,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from floatvocab.db import initialize_database, open_connection
 from floatvocab.models import WordCard
+from floatvocab.repositories import LexiconRepository, NewsRepository, PlanRepository, StudyRepository
 import news_digest
 from example_pipeline import enrich_database
 
@@ -76,35 +77,22 @@ class FloatVocabDB:
             exam_lexicons=EXAM_LEXICONS,
             qwerty_item_to_word=qwerty_item_to_word,
         )
+        self.lexicon_repository = LexiconRepository(self.conn)
+        self.plan_repository = PlanRepository(self.conn)
+        self.study_repository = StudyRepository(
+            self.conn,
+            calculate_srs=calculate_srs,
+            row_to_card=row_to_card,
+        )
+        self.news_repository = NewsRepository(self.conn)
 
     def create_lexicon(self, name: str, source: str = 'custom') -> int:
-        cursor = self.conn.execute("INSERT OR IGNORE INTO lexicons (name, source) VALUES (?, ?)", (name, source))
-        self.conn.commit()
-        if cursor.lastrowid:
-            return cursor.lastrowid
-        return self.conn.execute("SELECT id FROM lexicons WHERE name = ?", (name,)).fetchone()["id"]
+        return self.lexicon_repository.create_lexicon(name, source)
 
     def import_words(self, file_path: str) -> tuple[int, str]:
         path = Path(file_path)
-        lexicon_id = self.create_lexicon(path.stem, "import")
         rows = self.parse_word_file(path)
-        today = date.today().isoformat()
-        imported = 0
-        for row in rows:
-            word = row.get("word", "").strip()
-            meaning = row.get("meaning", "").strip()
-            if not word or not meaning:
-                continue
-            self.conn.execute(
-                """
-                INSERT OR IGNORE INTO words
-                (lexicon_id, word, phonetic, meaning, example, next_review_date)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (lexicon_id, word, row.get("phonetic", "").strip(), meaning, row.get("example", "").strip(), today),
-            )
-            imported += 1
-        self.conn.commit()
+        imported = self.lexicon_repository.import_word_rows(path.stem, rows, "import")
         return imported, path.stem
 
     @staticmethod
@@ -129,168 +117,31 @@ class FloatVocabDB:
         return rows
 
     def lexicons(self):
-        return self.conn.execute(
-            """
-            SELECT l.*,
-              COUNT(w.id) AS total,
-              SUM(CASE WHEN w.status = 'mastered' THEN 1 ELSE 0 END) AS mastered
-            FROM lexicons l
-            LEFT JOIN words w ON w.lexicon_id = l.id
-            GROUP BY l.id
-            ORDER BY l.created_at
-            """
-        ).fetchall()
+        return self.lexicon_repository.list_lexicons()
 
     def plan(self):
-        return self.conn.execute("SELECT * FROM plans WHERE id = 1").fetchone()
+        return self.plan_repository.fetch_plan()
 
     def save_plan(self, lexicon_id: int, daily_new: int, target_date: str, alpha: float, font_size: int, bg_color: str, widget_size: str):
-        current_plan = self.plan()
-        current_word_id = current_plan["current_word_id"] if "current_word_id" in current_plan.keys() else None
-        if current_plan["lexicon_id"] != lexicon_id:
-            current_word_id = None
-        self.conn.execute(
-            """
-            UPDATE plans
-            SET lexicon_id = ?, daily_new = ?, target_date = ?, float_alpha = ?,
-                font_size = ?, bg_color = ?, widget_size = ?, current_word_id = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = 1
-            """,
-            (lexicon_id, daily_new, target_date, alpha, font_size, bg_color, widget_size, current_word_id),
-        )
-        self.conn.commit()
+        self.plan_repository.save_plan(lexicon_id, daily_new, target_date, alpha, font_size, bg_color, widget_size)
 
     def save_float_style(self, alpha: float, font_size: int, bg_color: str, widget_size: str):
-        self.conn.execute(
-            """
-            UPDATE plans
-            SET float_alpha = ?, font_size = ?, bg_color = ?, widget_size = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = 1
-            """,
-            (alpha, font_size, bg_color, widget_size),
-        )
-        self.conn.commit()
+        self.plan_repository.save_float_style(alpha, font_size, bg_color, widget_size)
 
     def next_card(self) -> WordCard | None:
-        plan = self.plan()
-        lexicon_id = plan["lexicon_id"]
-        if not lexicon_id:
-            return None
-        current_word_id = plan["current_word_id"] if "current_word_id" in plan.keys() else None
-        if current_word_id:
-            current_card = self.conn.execute(
-                """
-                SELECT w.*, l.name AS lexicon_name
-                FROM words w JOIN lexicons l ON l.id = w.lexicon_id
-                WHERE w.id = ? AND w.lexicon_id = ? AND w.status != 'mastered'
-                """,
-                (current_word_id, lexicon_id),
-            ).fetchone()
-            if current_card:
-                return row_to_card(current_card)
-            self.conn.execute("UPDATE plans SET current_word_id = NULL WHERE id = 1")
-            self.conn.commit()
-        today = date.today().isoformat()
-        card = self.conn.execute(
-            """
-            SELECT w.*, l.name AS lexicon_name
-            FROM words w JOIN lexicons l ON l.id = w.lexicon_id
-            WHERE w.lexicon_id = ?
-              AND w.status != 'mastered'
-            ORDER BY
-              CASE WHEN w.next_review_date <= ? THEN 0 ELSE 1 END,
-              CASE WHEN w.repetitions = 0 THEN 1 ELSE 0 END,
-              w.next_review_date,
-              w.seen_count,
-              w.id
-            LIMIT 1
-            """,
-            (lexicon_id, today),
-        ).fetchone()
-        if card:
-            self.conn.execute("UPDATE plans SET current_word_id = ? WHERE id = 1", (card["id"],))
-            self.conn.commit()
-        return row_to_card(card) if card else None
+        return self.study_repository.next_card()
 
     def review(self, word_id: int, rating: int):
-        row = self.conn.execute("SELECT * FROM words WHERE id = ?", (word_id,)).fetchone()
-        if not row:
-            return
-        old_interval = row["interval_days"]
-        next_state = calculate_srs(row, rating)
-        status = STATUS_MASTERED if rating >= 4 and next_state["repetitions"] >= 3 else STATUS_FUZZY if rating >= 3 else STATUS_NEW
-        self.conn.execute(
-            """
-            UPDATE words
-            SET status = ?, next_review_date = ?, interval_days = ?, repetitions = ?,
-                ease_factor = ?, seen_count = seen_count + 1,
-                correct_count = correct_count + ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (
-                status,
-                next_state["next_review_date"],
-                next_state["interval_days"],
-                next_state["repetitions"],
-                next_state["ease_factor"],
-                1 if rating >= 3 else 0,
-                word_id,
-            ),
-        )
-        self.conn.execute(
-            "INSERT INTO reviews (word_id, rating, old_interval_days, new_interval_days) VALUES (?, ?, ?, ?)",
-            (word_id, rating, old_interval, next_state["interval_days"]),
-        )
-        today = date.today().isoformat()
-        self.conn.execute(
-            """
-            INSERT INTO daily_stats (day, reviewed, known, unknown, new_seen)
-            VALUES (?, 1, ?, ?, ?)
-            ON CONFLICT(day) DO UPDATE SET
-              reviewed = reviewed + 1,
-              known = known + excluded.known,
-              unknown = unknown + excluded.unknown,
-              new_seen = new_seen + excluded.new_seen
-            """,
-            (today, 1 if rating >= 3 else 0, 1 if rating < 3 else 0, 1 if row["seen_count"] == 0 else 0),
-        )
-        self.conn.execute("UPDATE plans SET current_word_id = NULL WHERE id = 1 AND current_word_id = ?", (word_id,))
-        self.conn.commit()
+        self.study_repository.review(word_id, rating)
 
     def stats(self):
-        plan = self.plan()
-        lexicon_id = plan["lexicon_id"]
-        if not lexicon_id:
-            return {}
-        summary = self.conn.execute(
-            """
-            SELECT
-              COUNT(*) AS total,
-              SUM(CASE WHEN status = 'mastered' THEN 1 ELSE 0 END) AS mastered,
-              SUM(CASE WHEN status = 'fuzzy' THEN 1 ELSE 0 END) AS fuzzy,
-              SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS fresh,
-              SUM(CASE WHEN next_review_date <= date('now', 'localtime') AND status != 'mastered' THEN 1 ELSE 0 END) AS due
-            FROM words
-            WHERE lexicon_id = ?
-            """,
-            (lexicon_id,),
-        ).fetchone()
-        days = self.conn.execute(
-            "SELECT * FROM daily_stats WHERE day >= ? ORDER BY day",
-            ((date.today() - timedelta(days=29)).isoformat(),),
-        ).fetchall()
-        return {"summary": summary, "days": days}
+        return self.study_repository.stats()
 
     def missing_examples_count(self, lexicon_id: int | None = None) -> int:
-        if lexicon_id:
-            row = self.conn.execute(
-                "SELECT COUNT(*) AS total FROM words WHERE lexicon_id = ? AND (example IS NULL OR TRIM(example) = '')",
-                (lexicon_id,),
-            ).fetchone()
-        else:
-            row = self.conn.execute("SELECT COUNT(*) AS total FROM words WHERE example IS NULL OR TRIM(example) = ''").fetchone()
-        return int(row["total"] or 0)
+        return self.study_repository.missing_examples_count(lexicon_id)
+
+    def recent_words(self, lexicon_id: int, limit: int = 80):
+        return self.lexicon_repository.recent_words(lexicon_id, limit)
 
 
 def row_to_word_dict(row):
