@@ -144,12 +144,23 @@ def save_brief_to_favorites(conn: sqlite3.Connection, brief_id: int) -> sqlite3.
     brief = conn.execute("SELECT * FROM daily_briefs WHERE id = ?", (brief_id,)).fetchone()
     if not brief:
         raise ValueError("日报不存在")
-    content_text = fetch_article_content(brief["source_key"], brief["url"])
-    bilingual_text = to_bilingual_text(content_text)
     metadata = {
         "saved_from_brief_id": brief_id,
         "saved_at": datetime.now().isoformat(timespec="seconds"),
     }
+    try:
+        content_text = fetch_article_content(brief["source_key"], brief["url"])
+    except Exception as exc:
+        content_text = build_fallback_content(brief)
+        metadata["content_error"] = str(exc)
+        metadata["content_mode"] = "summary_fallback"
+
+    try:
+        bilingual_text = to_bilingual_text(content_text)
+    except Exception as exc:
+        bilingual_text = content_text
+        metadata["translation_error"] = str(exc)
+        metadata["translation_mode"] = "source_only"
     conn.execute(
         """
         INSERT INTO favorite_articles
@@ -172,6 +183,17 @@ def save_brief_to_favorites(conn: sqlite3.Connection, brief_id: int) -> sqlite3.
     conn.execute("UPDATE daily_briefs SET saved = 1 WHERE id = ?", (brief_id,))
     conn.commit()
     return conn.execute("SELECT * FROM favorite_articles WHERE brief_id = ?", (brief_id,)).fetchone()
+
+
+def build_fallback_content(brief: sqlite3.Row) -> str:
+    parts = [brief["title"].strip()]
+    summary = (brief["summary"] or "").strip()
+    if summary:
+        parts.append(summary)
+    url = (brief["url"] or "").strip()
+    if url:
+        parts.append(f"原文链接：{url}")
+    return "\n\n".join(parts)
 
 
 def fetch_briefs(limit: int) -> Iterable[Brief]:

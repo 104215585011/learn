@@ -14,6 +14,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
 import news_digest
+from example_pipeline import enrich_database
 
 
 APP_NAME = "FloatVocab"
@@ -24,6 +25,8 @@ DB_PATH = APP_ROOT / "floatvocab.db"
 BUILTIN_LEXICON = DATA_DIR / "kaoyan_50.json"
 VOCAB_SOURCE_DIR = DATA_DIR / "vocab_sources"
 EXAM_LEXICONS = [
+    ("初中词汇", "ChuZhong_3_T.json"),
+    ("高中词汇", "GaoZhong_3_T.json"),
     ("考研词汇", "KaoYan_3_T.json"),
     ("大学英语四级 CET-4", "CET4_T.json"),
     ("大学英语六级 CET-6", "CET6_T.json"),
@@ -31,6 +34,7 @@ EXAM_LEXICONS = [
     ("英语专业八级 TEM-8", "Level8luan_2_T.json"),
     ("托福 TOEFL", "TOEFL_3_T.json"),
     ("雅思 IELTS", "IELTS_3_T.json"),
+    ("SAT", "SAT_3_T.json"),
     ("PTE WFD", "PTE_WFD.json"),
     ("PTE FIB Listening", "PTE_FIB_L.json"),
     ("PTE FIB Reading", "PTE_FIB_R_junior.json"),
@@ -39,6 +43,26 @@ EXAM_LEXICONS = [
 STATUS_NEW = "new"
 STATUS_FUZZY = "fuzzy"
 STATUS_MASTERED = "mastered"
+
+THEME = {
+    "bg": "#F3F8FE",
+    "panel": "#FFFFFF",
+    "panel_alt": "#EEF6FF",
+    "hero": "#E7F3FF",
+    "border": "#D7E7F7",
+    "text": "#17324D",
+    "muted": "#617A93",
+    "accent": "#2B84F6",
+    "accent_active": "#1A6ED8",
+    "accent_soft": "#D8EBFF",
+    "success": "#21A366",
+    "danger": "#EF6A6A",
+    "warning": "#F2A93B",
+    "heat_0": "#E8F1FB",
+    "heat_1": "#CAE2FF",
+    "heat_2": "#8FC2FF",
+    "heat_3": "#3B90F7",
+}
 
 
 @dataclass
@@ -80,6 +104,10 @@ class FloatVocabDB:
               phonetic TEXT DEFAULT '',
               meaning TEXT NOT NULL,
               example TEXT DEFAULT '',
+              example_source TEXT DEFAULT '',
+              example_updated_at TEXT,
+              example_attempted_at TEXT,
+              example_attempts INTEGER NOT NULL DEFAULT 0,
               status TEXT NOT NULL DEFAULT 'new',
               next_review_date TEXT NOT NULL,
               interval_days INTEGER NOT NULL DEFAULT 0,
@@ -126,6 +154,7 @@ class FloatVocabDB:
             """
         )
         self.ensure_plan_columns()
+        self.ensure_word_columns()
         self.conn.execute(
             "INSERT OR IGNORE INTO plans (id, lexicon_id, daily_new, target_date) VALUES (1, NULL, 20, ?)",
             [(date.today() + timedelta(days=90)).isoformat()],
@@ -136,6 +165,19 @@ class FloatVocabDB:
         columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(plans)").fetchall()}
         if "widget_size" not in columns:
             self.conn.execute("ALTER TABLE plans ADD COLUMN widget_size TEXT NOT NULL DEFAULT 'medium'")
+        if "current_word_id" not in columns:
+            self.conn.execute("ALTER TABLE plans ADD COLUMN current_word_id INTEGER")
+
+    def ensure_word_columns(self):
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(words)").fetchall()}
+        if "example_source" not in columns:
+            self.conn.execute("ALTER TABLE words ADD COLUMN example_source TEXT DEFAULT ''")
+        if "example_updated_at" not in columns:
+            self.conn.execute("ALTER TABLE words ADD COLUMN example_updated_at TEXT")
+        if "example_attempted_at" not in columns:
+            self.conn.execute("ALTER TABLE words ADD COLUMN example_attempted_at TEXT")
+        if "example_attempts" not in columns:
+            self.conn.execute("ALTER TABLE words ADD COLUMN example_attempts INTEGER NOT NULL DEFAULT 0")
 
     def seed_builtin(self):
         if self.conn.execute("SELECT 1 FROM lexicons WHERE name = ?", ("考研核心 50",)).fetchone():
@@ -251,14 +293,18 @@ class FloatVocabDB:
         return self.conn.execute("SELECT * FROM plans WHERE id = 1").fetchone()
 
     def save_plan(self, lexicon_id: int, daily_new: int, target_date: str, alpha: float, font_size: int, bg_color: str, widget_size: str):
+        current_plan = self.plan()
+        current_word_id = current_plan["current_word_id"] if "current_word_id" in current_plan.keys() else None
+        if current_plan["lexicon_id"] != lexicon_id:
+            current_word_id = None
         self.conn.execute(
             """
             UPDATE plans
             SET lexicon_id = ?, daily_new = ?, target_date = ?, float_alpha = ?,
-                font_size = ?, bg_color = ?, widget_size = ?, updated_at = CURRENT_TIMESTAMP
+                font_size = ?, bg_color = ?, widget_size = ?, current_word_id = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = 1
             """,
-            (lexicon_id, daily_new, target_date, alpha, font_size, bg_color, widget_size),
+            (lexicon_id, daily_new, target_date, alpha, font_size, bg_color, widget_size, current_word_id),
         )
         self.conn.commit()
 
@@ -278,6 +324,20 @@ class FloatVocabDB:
         lexicon_id = plan["lexicon_id"]
         if not lexicon_id:
             return None
+        current_word_id = plan["current_word_id"] if "current_word_id" in plan.keys() else None
+        if current_word_id:
+            current_card = self.conn.execute(
+                """
+                SELECT w.*, l.name AS lexicon_name
+                FROM words w JOIN lexicons l ON l.id = w.lexicon_id
+                WHERE w.id = ? AND w.lexicon_id = ? AND w.status != 'mastered'
+                """,
+                (current_word_id, lexicon_id),
+            ).fetchone()
+            if current_card:
+                return row_to_card(current_card)
+            self.conn.execute("UPDATE plans SET current_word_id = NULL WHERE id = 1")
+            self.conn.commit()
         today = date.today().isoformat()
         card = self.conn.execute(
             """
@@ -285,26 +345,19 @@ class FloatVocabDB:
             FROM words w JOIN lexicons l ON l.id = w.lexicon_id
             WHERE w.lexicon_id = ?
               AND w.status != 'mastered'
-              AND w.next_review_date <= ?
             ORDER BY
+              CASE WHEN w.next_review_date <= ? THEN 0 ELSE 1 END,
               CASE WHEN w.repetitions = 0 THEN 1 ELSE 0 END,
               w.next_review_date,
-              w.seen_count
+              w.seen_count,
+              w.id
             LIMIT 1
             """,
             (lexicon_id, today),
         ).fetchone()
-        if not card:
-            card = self.conn.execute(
-                """
-                SELECT w.*, l.name AS lexicon_name
-                FROM words w JOIN lexicons l ON l.id = w.lexicon_id
-                WHERE w.lexicon_id = ? AND w.status != 'mastered'
-                ORDER BY w.next_review_date, w.seen_count
-                LIMIT 1
-                """,
-                (lexicon_id,),
-            ).fetchone()
+        if card:
+            self.conn.execute("UPDATE plans SET current_word_id = ? WHERE id = 1", (card["id"],))
+            self.conn.commit()
         return row_to_card(card) if card else None
 
     def review(self, word_id: int, rating: int):
@@ -350,6 +403,7 @@ class FloatVocabDB:
             """,
             (today, 1 if rating >= 3 else 0, 1 if rating < 3 else 0, 1 if row["seen_count"] == 0 else 0),
         )
+        self.conn.execute("UPDATE plans SET current_word_id = NULL WHERE id = 1 AND current_word_id = ?", (word_id,))
         self.conn.commit()
 
     def stats(self):
@@ -375,6 +429,16 @@ class FloatVocabDB:
             ((date.today() - timedelta(days=29)).isoformat(),),
         ).fetchall()
         return {"summary": summary, "days": days}
+
+    def missing_examples_count(self, lexicon_id: int | None = None) -> int:
+        if lexicon_id:
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS total FROM words WHERE lexicon_id = ? AND (example IS NULL OR TRIM(example) = '')",
+                (lexicon_id,),
+            ).fetchone()
+        else:
+            row = self.conn.execute("SELECT COUNT(*) AS total FROM words WHERE example IS NULL OR TRIM(example) = ''").fetchone()
+        return int(row["total"] or 0)
 
 
 def row_to_word_dict(row):
@@ -472,24 +536,30 @@ class FloatingWindow(tk.Toplevel):
         self.overrideredirect(True)
         self.geometry("380x270+960+120")
 
-        self.panel_frame = tk.Frame(self, padx=16, pady=14, bd=0, relief="flat")
+        self.panel_frame = tk.Frame(self, padx=20, pady=18, bd=0, relief="flat")
         self.panel_frame.pack(fill="both", expand=True)
-        self.word_label = tk.Label(self.panel_frame, text="", font=("Segoe UI", 28, "bold"), wraplength=320)
-        self.word_label.pack(expand=True, fill="both")
-        self.detail_label = tk.Label(self.panel_frame, text="", wraplength=320, justify="center")
+        self.card_header = tk.Label(self.panel_frame, text="FloatVocab", anchor="w")
+        self.card_header.pack(fill="x")
+        self.word_label = tk.Label(self.panel_frame, text="", font=("Segoe UI", 28, "bold"), wraplength=320, justify="center")
+        self.word_label.pack(expand=True, fill="both", pady=(14, 8))
+        self.detail_label = tk.Label(self.panel_frame, text="", wraplength=320, justify="center", anchor="n")
         self.detail_label.pack(fill="x")
         self.action_frame = tk.Frame(self.panel_frame)
-        self.action_frame.pack(fill="x", pady=(10, 0))
+        self.action_frame.pack(fill="x", pady=(14, 0))
         self.unknown_button = tk.Button(self.action_frame, text="不认识", command=self.mark_unknown, width=9)
         self.unknown_button.pack(side="left")
         self.flip_button = tk.Button(self.action_frame, text="翻面", command=self.flip, width=9)
         self.flip_button.pack(side="left", expand=True)
         self.known_button = tk.Button(self.action_frame, text="认识", command=self.mark_known, width=9)
         self.known_button.pack(side="right")
-        self.hint_label = tk.Label(self.panel_frame, text="桌面组件 · Alt+Space 翻面 · Esc 隐藏", font=("Segoe UI", 9))
-        self.hint_label.pack(fill="x", pady=(8, 0))
-        self.drag_bar = tk.Frame(self.panel_frame, height=8, cursor="fleur")
-        self.drag_bar.pack(fill="x", pady=(8, 0))
+        self.hint_label = tk.Label(
+            self.panel_frame,
+            text="Alt+Space 翻面  ·  Alt+Left 不认识  ·  Alt+Right 认识",
+            font=("Segoe UI", 9),
+        )
+        self.hint_label.pack(fill="x", pady=(12, 0))
+        self.drag_bar = tk.Frame(self.panel_frame, height=10, cursor="fleur")
+        self.drag_bar.pack(fill="x", pady=(12, 0))
         self.resize_grip = tk.Label(self, text="◢", anchor="se", cursor="size_nw_se", font=("Segoe UI", 10), bd=0)
         self.resize_grip.place(relx=1.0, rely=1.0, x=0, y=0, anchor="se")
 
@@ -516,12 +586,44 @@ class FloatingWindow(tk.Toplevel):
         if self.winfo_width() <= 1 or self.winfo_height() <= 1:
             self.geometry(self.widget_geometry(width, height))
         self.configure(bg=bg)
-        for widget in [self.panel_frame, self.action_frame, self.drag_bar]:
+        for widget in [self.panel_frame, self.action_frame]:
             widget.configure(bg=bg)
-        for widget in [self.word_label, self.detail_label, self.hint_label, self.resize_grip]:
-            widget.configure(bg=bg, fg="#17211f")
-        for button in [self.unknown_button, self.flip_button, self.known_button]:
-            button.configure(bg="#ffffff", fg="#17211f", activebackground="#eef3ef", relief="solid", bd=1)
+        self.drag_bar.configure(bg=THEME["accent_soft"])
+        self.card_header.configure(bg=bg, fg=THEME["muted"], font=("Segoe UI", 10, "bold"))
+        self.word_label.configure(bg=bg, fg=THEME["text"])
+        self.detail_label.configure(bg=bg, fg=THEME["muted"])
+        self.hint_label.configure(bg=bg, fg=THEME["muted"])
+        self.resize_grip.configure(bg=bg, fg=THEME["muted"])
+        self.unknown_button.configure(
+            bg="#FFF2F2",
+            fg=THEME["danger"],
+            activebackground="#FFE4E4",
+            activeforeground=THEME["danger"],
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=8,
+        )
+        self.flip_button.configure(
+            bg=THEME["accent_soft"],
+            fg=THEME["accent_active"],
+            activebackground="#CBE2FF",
+            activeforeground=THEME["accent_active"],
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=8,
+        )
+        self.known_button.configure(
+            bg="#EAF8F1",
+            fg=THEME["success"],
+            activebackground="#D8F2E4",
+            activeforeground=THEME["success"],
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=8,
+        )
         self.update_wraplength()
         self.word_label.configure(font=("Segoe UI", font_size, "bold"))
         self.detail_label.configure(font=("Segoe UI", max(11, font_size // 2)))
@@ -593,8 +695,8 @@ class FloatingWindow(tk.Toplevel):
 
     def render(self):
         if not self.card:
-            self.word_label.configure(text="没有待背单词")
-            self.detail_label.configure(text="可以回主窗口导入新词库，或者明天再来。")
+            self.word_label.configure(text="今天没有待复习单词")
+            self.detail_label.configure(text="可以回到主界面导入词库，或者明天再来继续学习。")
             return
         if self.flipped:
             self.word_label.configure(text=self.card.meaning)
@@ -638,19 +740,43 @@ class DailyArticleWindow(tk.Toplevel):
         self.overrideredirect(True)
         self.geometry("560x640+980+90")
 
-        self.container = tk.Frame(self, bd=0, relief="flat", bg="#F7FAF5")
+        self.container = tk.Frame(self, bd=0, relief="flat", bg=THEME["panel"])
         self.container.pack(fill="both", expand=True)
-        self.header = tk.Frame(self.container, bg="#E9F0EC", height=36)
+        self.header = tk.Frame(self.container, bg=THEME["hero"], height=44)
         self.header.pack(fill="x")
-        self.title_label = tk.Label(self.header, text="日报内容", anchor="w", bg="#E9F0EC", fg="#17211f", font=("Segoe UI", 11, "bold"))
-        self.title_label.pack(side="left", fill="x", expand=True, padx=12, pady=8)
-        self.hide_label = tk.Label(self.header, text="收起", anchor="e", bg="#E9F0EC", fg="#4A5A55", cursor="hand2")
-        self.hide_label.pack(side="right", padx=12)
+        self.title_label = tk.Label(self.header, text="日报内容", anchor="w", bg=THEME["hero"], fg=THEME["text"], font=("Segoe UI", 12, "bold"))
+        self.title_label.pack(side="left", fill="x", expand=True, padx=16, pady=10)
+        self.hide_label = tk.Label(self.header, text="收起", anchor="e", bg=THEME["hero"], fg=THEME["muted"], cursor="hand2", font=("Segoe UI", 10, "bold"))
+        self.hide_label.pack(side="right", padx=16)
 
-        self.meta_label = tk.Label(self.container, text="", anchor="w", justify="left", bg="#F7FAF5", fg="#4A5A55", padx=12, pady=8)
+        self.meta_label = tk.Label(
+            self.container,
+            text="",
+            anchor="w",
+            justify="left",
+            bg=THEME["panel"],
+            fg=THEME["muted"],
+            padx=16,
+            pady=12,
+            font=("Segoe UI", 10),
+        )
         self.meta_label.pack(fill="x")
 
-        self.text = tk.Text(self.container, wrap="word", bg="#F7FAF5", fg="#17211f", bd=0, padx=12, pady=8)
+        self.text = tk.Text(
+            self.container,
+            wrap="word",
+            bg=THEME["panel"],
+            fg=THEME["text"],
+            bd=0,
+            padx=16,
+            pady=12,
+            relief="flat",
+            highlightthickness=0,
+            font=("Segoe UI", 11),
+            spacing1=3,
+            spacing2=3,
+            spacing3=6,
+        )
         self.text.pack(fill="both", expand=True)
         self.text.configure(state="disabled")
 
@@ -748,12 +874,12 @@ class FloatVocabApp:
     def __init__(self):
         self.db = FloatVocabDB(DB_PATH)
         self.root = tk.Tk()
-        self.root.title("浮窗背词 FloatVocab")
-        self.root.geometry("860x620")
+        self.configure_root()
         self.hotkey_events = queue.Queue()
         self.hotkeys = GlobalHotkeys(self.hotkey_events)
         self.loading_plan = False
         self.style_after_id = None
+        self.configure_styles()
         self.float_window = FloatingWindow(self)
         self.article_window = DailyArticleWindow(self)
         self.build_ui()
@@ -761,74 +887,243 @@ class FloatVocabApp:
         self.hotkeys.start()
         self.root.after(120, self.poll_hotkeys)
 
+    def configure_root(self):
+        self.root.title("FloatVocab 悬浮背词")
+        self.root.geometry("1180x860")
+        self.root.minsize(1080, 760)
+        self.root.configure(bg=THEME["bg"])
+
+    def configure_styles(self):
+        self.style = ttk.Style()
+        self.style.theme_use("clam")
+        self.root.option_add("*Font", "{Segoe UI} 10")
+        self.style.configure("App.TFrame", background=THEME["bg"])
+        self.style.configure("Panel.TFrame", background=THEME["panel"])
+        self.style.configure("Hero.TFrame", background=THEME["hero"])
+        self.style.configure("PanelTitle.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 12, "bold"))
+        self.style.configure("HeroTitle.TLabel", background=THEME["hero"], foreground=THEME["text"], font=("Segoe UI", 24, "bold"))
+        self.style.configure("HeroBody.TLabel", background=THEME["hero"], foreground=THEME["muted"], font=("Segoe UI", 10))
+        self.style.configure("SectionLabel.TLabel", background=THEME["panel"], foreground=THEME["muted"], font=("Segoe UI", 9, "bold"))
+        self.style.configure("Body.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 10))
+        self.style.configure("Muted.TLabel", background=THEME["panel"], foreground=THEME["muted"], font=("Segoe UI", 9))
+        self.style.configure("Summary.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 11, "bold"))
+        self.style.configure(
+            "Primary.TButton",
+            background=THEME["accent"],
+            foreground="#FFFFFF",
+            borderwidth=0,
+            focusthickness=0,
+            font=("Segoe UI", 10, "bold"),
+            padding=(16, 10),
+        )
+        self.style.map("Primary.TButton", background=[("active", THEME["accent_active"])], foreground=[("disabled", "#DCE7F7")])
+        self.style.configure(
+            "Secondary.TButton",
+            background=THEME["panel_alt"],
+            foreground=THEME["accent_active"],
+            bordercolor=THEME["border"],
+            focusthickness=0,
+            padding=(14, 10),
+        )
+        self.style.map("Secondary.TButton", background=[("active", THEME["accent_soft"])])
+        self.style.configure(
+            "Quiet.TButton",
+            background=THEME["panel"],
+            foreground=THEME["text"],
+            bordercolor=THEME["border"],
+            focusthickness=0,
+            padding=(12, 9),
+        )
+        self.style.map("Quiet.TButton", background=[("active", "#F6FAFF")])
+        self.style.configure(
+            "App.Horizontal.TProgressbar",
+            troughcolor="#E3EEF9",
+            background=THEME["accent"],
+            bordercolor="#E3EEF9",
+            lightcolor=THEME["accent"],
+            darkcolor=THEME["accent"],
+        )
+        self.style.configure(
+            "Treeview",
+            background=THEME["panel"],
+            fieldbackground=THEME["panel"],
+            foreground=THEME["text"],
+            rowheight=30,
+            bordercolor=THEME["border"],
+            lightcolor=THEME["panel"],
+            darkcolor=THEME["panel"],
+        )
+        self.style.map("Treeview", background=[("selected", THEME["accent_soft"])], foreground=[("selected", THEME["text"])])
+        self.style.configure(
+            "Treeview.Heading",
+            background=THEME["panel_alt"],
+            foreground=THEME["text"],
+            relief="flat",
+            borderwidth=0,
+            font=("Segoe UI", 10, "bold"),
+            padding=(8, 8),
+        )
+        self.style.map("Treeview.Heading", background=[("active", "#E4F0FF")])
+        self.style.configure(
+            "TCombobox",
+            fieldbackground=THEME["panel"],
+            background=THEME["panel"],
+            bordercolor=THEME["border"],
+            lightcolor=THEME["border"],
+            darkcolor=THEME["border"],
+            arrowsize=16,
+            padding=6,
+        )
+        self.style.configure(
+            "TEntry",
+            fieldbackground=THEME["panel"],
+            bordercolor=THEME["border"],
+            lightcolor=THEME["border"],
+            darkcolor=THEME["border"],
+            padding=6,
+        )
+        self.style.configure(
+            "TSpinbox",
+            fieldbackground=THEME["panel"],
+            bordercolor=THEME["border"],
+            lightcolor=THEME["border"],
+            darkcolor=THEME["border"],
+            padding=6,
+        )
+        self.style.configure(
+            "Horizontal.TScale",
+            background=THEME["panel"],
+            troughcolor="#DCE8F5",
+            bordercolor=THEME["panel"],
+            lightcolor=THEME["accent"],
+            darkcolor=THEME["accent"],
+        )
+        self.style.configure("TNotebook", background=THEME["panel"], borderwidth=0, tabmargins=(0, 0, 0, 0))
+        self.style.configure(
+            "TNotebook.Tab",
+            background=THEME["panel_alt"],
+            foreground=THEME["muted"],
+            padding=(16, 10),
+            borderwidth=0,
+        )
+        self.style.map(
+            "TNotebook.Tab",
+            background=[("selected", THEME["panel"]), ("active", THEME["accent_soft"])],
+            foreground=[("selected", THEME["text"]), ("active", THEME["text"])],
+        )
+
+    def create_panel(self, parent, title: str, subtitle: str | None = None):
+        panel = ttk.Frame(parent, style="Panel.TFrame", padding=18)
+        ttk.Label(panel, text=title, style="PanelTitle.TLabel").pack(anchor="w")
+        if subtitle:
+            ttk.Label(panel, text=subtitle, style="Muted.TLabel", wraplength=460, justify="left").pack(anchor="w", pady=(4, 14))
+        return panel
+
     def build_ui(self):
         self.root.columnconfigure(0, weight=1)
-        header = ttk.Frame(self.root, padding=16)
-        header.grid(row=0, column=0, sticky="ew")
-        ttk.Label(header, text="FloatVocab 浮窗背词", font=("Segoe UI", 22, "bold")).pack(anchor="w")
-        ttk.Label(header, text="把背词压成一眼，不把焦虑摊成一桌。").pack(anchor="w")
+        self.root.rowconfigure(0, weight=1)
+        shell = ttk.Frame(self.root, style="App.TFrame", padding=20)
+        shell.grid(row=0, column=0, sticky="nsew")
+        shell.columnconfigure(0, weight=1)
+        shell.rowconfigure(1, weight=1)
 
-        body = ttk.Frame(self.root, padding=(16, 0, 16, 16))
-        body.grid(row=1, column=0, sticky="nsew")
-        body.columnconfigure(0, weight=1)
-        body.columnconfigure(1, weight=1)
+        hero = ttk.Frame(shell, style="Hero.TFrame", padding=22)
+        hero.grid(row=0, column=0, sticky="ew")
+        hero.columnconfigure(0, weight=1)
+        ttk.Label(hero, text="FloatVocab", style="HeroTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            hero,
+            text="把每日计划、悬浮背词和英语日报放到一个更清晰的学习工作台里。",
+            style="HeroBody.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        hero_actions = ttk.Frame(hero, style="Hero.TFrame")
+        hero_actions.grid(row=0, column=1, rowspan=2, sticky="e")
+        ttk.Button(hero_actions, text="显示悬浮窗", style="Primary.TButton", command=self.float_window.show_next).pack(side="left", padx=(0, 10))
+        ttk.Button(hero_actions, text="刷新日报", style="Secondary.TButton", command=self.refresh_daily_briefs).pack(side="left")
 
-        plan_box = ttk.LabelFrame(body, text="学习计划", padding=12)
-        plan_box.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=8)
+        self.content_notebook = ttk.Notebook(shell)
+        self.content_notebook.grid(row=1, column=0, sticky="nsew", pady=(18, 0))
+
+        dashboard_tab = ttk.Frame(self.content_notebook, style="App.TFrame", padding=8)
+        dashboard_tab.columnconfigure(0, weight=1)
+        dashboard_tab.columnconfigure(1, weight=1)
+        dashboard_tab.rowconfigure(2, weight=1)
+        self.content_notebook.add(dashboard_tab, text="学习台")
+
+        plan_box = self.create_panel(dashboard_tab, "学习计划", "先确定词库和每日目标，再进入今天的背词节奏。")
+        plan_box.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         self.lexicon_var = tk.StringVar()
-        self.lexicon_combo = ttk.Combobox(plan_box, textvariable=self.lexicon_var, state="readonly")
-        self.lexicon_combo.grid(row=0, column=0, columnspan=2, sticky="ew", pady=4)
-        plan_box.columnconfigure(1, weight=1)
-        ttk.Label(plan_box, text="每日新词").grid(row=1, column=0, sticky="w", pady=4)
-        self.daily_new_var = tk.IntVar(value=20)
-        ttk.Spinbox(plan_box, from_=1, to=300, textvariable=self.daily_new_var).grid(row=1, column=1, sticky="ew", pady=4)
-        ttk.Label(plan_box, text="目标日期").grid(row=2, column=0, sticky="w", pady=4)
+        plan_form = ttk.Frame(plan_box, style="Panel.TFrame")
+        plan_form.pack(fill="x")
+        plan_form.columnconfigure(0, weight=1)
+        plan_form.columnconfigure(1, weight=1)
+        ttk.Label(plan_form, text="当前词库", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(plan_form, text="目标日期", style="SectionLabel.TLabel").grid(row=0, column=1, sticky="w", padx=(12, 0), pady=(0, 6))
+        self.lexicon_combo = ttk.Combobox(plan_form, textvariable=self.lexicon_var, state="readonly")
+        self.lexicon_combo.grid(row=1, column=0, sticky="ew", padx=(0, 6))
         self.target_date_var = tk.StringVar()
-        ttk.Entry(plan_box, textvariable=self.target_date_var).grid(row=2, column=1, sticky="ew", pady=4)
-        ttk.Button(plan_box, text="保存计划", command=self.save_plan).grid(row=3, column=0, sticky="ew", pady=8)
-        ttk.Button(plan_box, text="显示悬浮窗", command=self.float_window.show_next).grid(row=3, column=1, sticky="ew", pady=8)
-        ttk.Button(plan_box, text="导入 TXT / CSV 词库", command=self.import_words).grid(row=4, column=0, columnspan=2, sticky="ew")
+        ttk.Entry(plan_form, textvariable=self.target_date_var).grid(row=1, column=1, sticky="ew", padx=(6, 0))
+        ttk.Label(plan_form, text="每日新词", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 6))
+        ttk.Label(plan_form, text="状态", style="SectionLabel.TLabel").grid(row=2, column=1, sticky="w", padx=(12, 0), pady=(14, 6))
+        self.daily_new_var = tk.IntVar(value=20)
+        ttk.Spinbox(plan_form, from_=1, to=300, textvariable=self.daily_new_var).grid(row=3, column=0, sticky="ew", padx=(0, 6))
+        self.example_status_label = ttk.Label(plan_form, text="", style="Muted.TLabel")
+        self.example_status_label.grid(row=3, column=1, sticky="w", padx=(12, 0))
+        plan_actions = ttk.Frame(plan_box, style="Panel.TFrame")
+        plan_actions.pack(fill="x", pady=(16, 0))
+        ttk.Button(plan_actions, text="保存计划", style="Secondary.TButton", command=self.save_plan).pack(side="left")
+        ttk.Button(plan_actions, text="导入 TXT / CSV 词库", style="Quiet.TButton", command=self.import_words).pack(side="left", padx=(10, 0))
+        ttk.Button(plan_actions, text="补全缺失例句", style="Quiet.TButton", command=self.enrich_examples).pack(side="left", padx=(10, 0))
 
-        style_box = ttk.LabelFrame(body, text="悬浮窗样式", padding=12)
-        style_box.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=8)
-        ttk.Label(style_box, text="透明度").grid(row=0, column=0, sticky="w")
+        style_box = self.create_panel(dashboard_tab, "悬浮窗样式", "调整透明度、字号和背景，让桌面复习卡片更顺眼。")
+        style_box.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        style_form = ttk.Frame(style_box, style="Panel.TFrame")
+        style_form.pack(fill="x")
+        style_form.columnconfigure(1, weight=1)
+        ttk.Label(style_form, text="透明度", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w")
         self.alpha_var = tk.DoubleVar(value=0.88)
-        ttk.Scale(style_box, from_=0.35, to=1.0, variable=self.alpha_var, orient="horizontal").grid(row=0, column=1, sticky="ew")
-        ttk.Label(style_box, text="字体大小").grid(row=1, column=0, sticky="w")
+        ttk.Scale(style_form, from_=0.35, to=1.0, variable=self.alpha_var, orient="horizontal").grid(row=0, column=1, sticky="ew")
+        ttk.Label(style_form, text="字体大小", style="SectionLabel.TLabel").grid(row=1, column=0, sticky="w", pady=(14, 0))
         self.font_size_var = tk.IntVar(value=26)
-        ttk.Spinbox(style_box, from_=16, to=56, textvariable=self.font_size_var).grid(row=1, column=1, sticky="ew")
-        ttk.Label(style_box, text="背景颜色").grid(row=2, column=0, sticky="w")
+        ttk.Spinbox(style_form, from_=16, to=56, textvariable=self.font_size_var).grid(row=1, column=1, sticky="ew", pady=(14, 0))
+        ttk.Label(style_form, text="背景颜色", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 0))
         self.bg_color_var = tk.StringVar(value="#F7FAF5")
-        ttk.Entry(style_box, textvariable=self.bg_color_var).grid(row=2, column=1, sticky="ew")
-        ttk.Label(style_box, text="组件大小").grid(row=3, column=0, sticky="w")
+        ttk.Entry(style_form, textvariable=self.bg_color_var).grid(row=2, column=1, sticky="ew", pady=(14, 0))
+        ttk.Label(style_form, text="组件尺寸", style="SectionLabel.TLabel").grid(row=3, column=0, sticky="w", pady=(14, 0))
         self.widget_size_var = tk.StringVar(value="medium")
         self.widget_size_combo = ttk.Combobox(
-            style_box,
+            style_form,
             textvariable=self.widget_size_var,
             state="readonly",
             values=["small", "medium", "large"],
         )
-        self.widget_size_combo.grid(row=3, column=1, sticky="ew")
-        ttk.Button(style_box, text="选择颜色", command=self.choose_color).grid(row=4, column=0, sticky="ew", pady=8)
-        ttk.Label(style_box, text="选择后自动应用").grid(row=4, column=1, sticky="w", pady=8)
-        ttk.Label(style_box, text="全局快捷键：Alt+Space 翻面，Alt+Left 不认识，Alt+Right 认识").grid(row=5, column=0, columnspan=2, sticky="w")
-        style_box.columnconfigure(1, weight=1)
+        self.widget_size_combo.grid(row=3, column=1, sticky="ew", pady=(14, 0))
+        style_actions = ttk.Frame(style_box, style="Panel.TFrame")
+        style_actions.pack(fill="x", pady=(16, 0))
+        ttk.Button(style_actions, text="选择颜色", style="Quiet.TButton", command=self.choose_color).pack(side="left")
+        ttk.Label(style_actions, text="调整后会自动同步到悬浮窗。", style="Muted.TLabel").pack(side="left", padx=(12, 0))
+        ttk.Label(style_box, text="全局快捷键：Alt+Space 翻面，Alt+Left 不认识，Alt+Right 认识", style="Muted.TLabel", wraplength=420, justify="left").pack(anchor="w", pady=(12, 0))
         for variable in [self.alpha_var, self.font_size_var, self.bg_color_var, self.widget_size_var]:
             variable.trace_add("write", self.schedule_float_style_save)
 
-        stats_box = ttk.LabelFrame(body, text="任务统计", padding=12)
-        stats_box.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=8)
-        stats_box.columnconfigure(0, weight=1)
-        self.progress_label = ttk.Label(stats_box, text="")
-        self.progress_label.grid(row=0, column=0, sticky="w")
-        self.progress = ttk.Progressbar(stats_box, maximum=100)
-        self.progress.grid(row=1, column=0, sticky="ew", pady=8)
-        self.heatmap_frame = ttk.Frame(stats_box)
-        self.heatmap_frame.grid(row=2, column=0, sticky="ew")
+        stats_box = self.create_panel(dashboard_tab, "任务统计", "今天的复习完成度和最近 30 天的节奏集中显示在这里。")
+        stats_box.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        self.progress_label = ttk.Label(stats_box, text="", style="Summary.TLabel")
+        self.progress_label.pack(anchor="w")
+        self.progress = ttk.Progressbar(stats_box, maximum=100, style="App.Horizontal.TProgressbar")
+        self.progress.pack(fill="x", pady=(12, 12))
+        self.heatmap_frame = tk.Frame(stats_box, bg=THEME["panel"])
+        self.heatmap_frame.pack(fill="x")
 
-        words_box = ttk.LabelFrame(body, text="当前词库概览", padding=12)
-        words_box.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=8)
-        self.words_tree = ttk.Treeview(words_box, columns=("word", "meaning", "status"), show="headings", height=8)
+        words_tab = ttk.Frame(self.content_notebook, style="Panel.TFrame", padding=8)
+        words_tab.columnconfigure(0, weight=1)
+        words_tab.rowconfigure(1, weight=1)
+        self.content_notebook.add(words_tab, text="词库概览")
+
+        ttk.Label(words_tab, text="最近更新的词条会显示在这里，便于快速浏览当前学习内容。", style="Muted.TLabel", wraplength=880, justify="left").grid(row=0, column=0, sticky="w", pady=(0, 10))
+        words_table_frame = ttk.Frame(words_tab, style="Panel.TFrame")
+        words_table_frame.grid(row=1, column=0, sticky="nsew")
+        self.words_tree = ttk.Treeview(words_table_frame, columns=("word", "meaning", "status"), show="headings", height=14)
         self.words_tree.heading("word", text="单词")
         self.words_tree.heading("meaning", text="释义")
         self.words_tree.heading("status", text="状态")
@@ -837,20 +1132,28 @@ class FloatVocabApp:
         self.words_tree.column("status", width=100, anchor="center")
         self.words_tree.pack(fill="both", expand=True)
 
-        news_box = ttk.LabelFrame(body, text="英语日报", padding=12)
-        news_box.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=8)
-        news_box.columnconfigure(0, weight=1)
-        news_box.columnconfigure(1, weight=1)
-        news_box.rowconfigure(1, weight=1)
+        news_tab = ttk.Frame(self.content_notebook, style="Panel.TFrame", padding=8)
+        news_tab.columnconfigure(0, weight=1)
+        news_tab.rowconfigure(1, weight=1)
+        self.content_notebook.add(news_tab, text="英语日报")
 
-        ttk.Button(news_box, text="刷新最新10篇", command=self.refresh_daily_briefs).grid(row=0, column=0, sticky="w")
-        ttk.Button(news_box, text="收藏并翻译", command=self.save_selected_brief).grid(row=0, column=1, sticky="e")
+        news_actions = ttk.Frame(news_tab, style="Panel.TFrame")
+        news_actions.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        news_actions.columnconfigure(0, weight=1)
+        ttk.Button(news_actions, text="刷新最新 10 篇", style="Quiet.TButton", command=self.refresh_daily_briefs).grid(row=0, column=0, sticky="w")
+        ttk.Button(news_actions, text="收藏并翻译", style="Secondary.TButton", command=self.save_selected_brief).grid(row=0, column=1, sticky="e")
 
-        latest_frame = ttk.Frame(news_box)
-        latest_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        news_content = ttk.Frame(news_tab, style="Panel.TFrame")
+        news_content.grid(row=1, column=0, sticky="nsew")
+        news_content.columnconfigure(0, weight=1)
+        news_content.columnconfigure(1, weight=1)
+        news_content.rowconfigure(0, weight=1)
+
+        latest_frame = ttk.Frame(news_content, style="Panel.TFrame")
+        latest_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         latest_frame.columnconfigure(0, weight=1)
         latest_frame.rowconfigure(1, weight=1)
-        ttk.Label(latest_frame, text="最新日报").grid(row=0, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(latest_frame, text="最新日报", style="PanelTitle.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 8))
         self.brief_tree = ttk.Treeview(latest_frame, columns=("source", "published", "title"), show="headings", height=10)
         self.brief_tree.heading("source", text="来源")
         self.brief_tree.heading("published", text="时间")
@@ -861,15 +1164,27 @@ class FloatVocabApp:
         self.brief_tree.grid(row=1, column=0, sticky="nsew")
         self.brief_tree.bind("<Double-1>", lambda _event: self.save_selected_brief())
         self.brief_tree.bind("<<TreeviewSelect>>", lambda _event: self.show_selected_brief())
-        self.brief_summary = tk.Text(latest_frame, height=4, wrap="word")
+        self.brief_summary = tk.Text(
+            latest_frame,
+            height=5,
+            wrap="word",
+            bg=THEME["panel_alt"],
+            fg=THEME["text"],
+            bd=0,
+            padx=12,
+            pady=12,
+            relief="flat",
+            highlightthickness=0,
+            font=("Segoe UI", 10),
+        )
         self.brief_summary.grid(row=2, column=0, sticky="ew", pady=(8, 0))
         self.brief_summary.configure(state="disabled")
 
-        favorite_frame = ttk.Frame(news_box)
-        favorite_frame.grid(row=1, column=1, sticky="nsew", padx=(8, 0))
+        favorite_frame = ttk.Frame(news_content, style="Panel.TFrame")
+        favorite_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         favorite_frame.columnconfigure(0, weight=1)
         favorite_frame.rowconfigure(1, weight=1)
-        ttk.Label(favorite_frame, text="个人收藏").grid(row=0, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(favorite_frame, text="个人收藏", style="PanelTitle.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 8))
         self.favorite_tree = ttk.Treeview(favorite_frame, columns=("source", "saved", "title"), show="headings", height=10)
         self.favorite_tree.heading("source", text="来源")
         self.favorite_tree.heading("saved", text="收藏时间")
@@ -880,7 +1195,13 @@ class FloatVocabApp:
         self.favorite_tree.grid(row=1, column=0, sticky="nsew")
         self.favorite_tree.bind("<<TreeviewSelect>>", lambda _event: self.show_selected_favorite())
         self.favorite_tree.bind("<Double-1>", lambda _event: self.show_selected_favorite())
-        ttk.Label(favorite_frame, text="点击或双击收藏条目弹出日报内容窗，可拖动，失焦自动收起。").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(
+            favorite_frame,
+            text="点击或双击收藏条目，会在阅读窗中打开完整内容；失焦后会自动收起。",
+            style="Muted.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
 
     def refresh_all(self):
         self.refresh_lexicons()
@@ -888,6 +1209,7 @@ class FloatVocabApp:
         self.refresh_words()
         self.refresh_brief_list()
         self.refresh_favorite_list()
+        self.refresh_example_status()
 
     def refresh_lexicons(self):
         self.lexicons = self.db.lexicons()
@@ -977,6 +1299,35 @@ class FloatVocabApp:
         messagebox.showinfo(APP_NAME, f"已导入 {name}：{count} 个单词。")
         self.refresh_all()
 
+    def refresh_example_status(self):
+        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
+        missing = self.db.missing_examples_count(lexicon_id)
+        self.example_status_label.configure(text=f"当前词库还缺 {missing} 条例句")
+
+    def enrich_examples(self):
+        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
+        self.example_status_label.configure(text="正在补全例句...")
+
+        def worker():
+            try:
+                result = enrich_database(DB_PATH, limit=200, refresh=False, lexicon_id=lexicon_id)
+            except Exception as exc:
+                error_message = f"例句补全失败：{exc}"
+                self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
+                self.root.after(0, self.refresh_example_status)
+                return
+
+            def done():
+                self.refresh_all()
+                messagebox.showinfo(
+                    APP_NAME,
+                    f"例句补全完成：处理 {result['processed']}，补全 {result['updated']}，跳过 {result['skipped']}，失败 {len(result['failures'])}。",
+                )
+
+            self.root.after(0, done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def choose_color(self):
         color = colorchooser.askcolor(initialcolor=self.bg_color_var.get())[1]
         if color:
@@ -1000,8 +1351,25 @@ class FloatVocabApp:
         for i in range(30):
             day = date.today() - timedelta(days=29 - i)
             count = day_map.get(day.isoformat(), 0)
-            color = "#E3E9E6" if count == 0 else "#B9D7CA" if count < 5 else "#73B99D" if count < 15 else "#248B72"
-            label = tk.Label(self.heatmap_frame, text=str(day.day), width=3, height=2, bg=color, fg="#17211f")
+            color = (
+                THEME["heat_0"]
+                if count == 0
+                else THEME["heat_1"]
+                if count < 5
+                else THEME["heat_2"]
+                if count < 15
+                else THEME["heat_3"]
+            )
+            label = tk.Label(
+                self.heatmap_frame,
+                text=str(day.day),
+                width=3,
+                height=2,
+                bg=color,
+                fg=THEME["text"],
+                font=("Segoe UI", 9),
+                relief="flat",
+            )
             label.grid(row=0, column=i, padx=2, pady=4)
 
     def refresh_words(self):
@@ -1026,7 +1394,8 @@ class FloatVocabApp:
                 conn.row_factory = sqlite3.Row
                 news_digest.refresh_latest_briefs(conn, limit=10)
         except Exception as exc:
-            self.root.after(0, lambda: messagebox.showerror(APP_NAME, f"刷新日报失败：{exc}"))
+            error_message = f"刷新日报失败：{exc}"
+            self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
             return
         self.root.after(0, self.refresh_brief_list)
 
@@ -1072,7 +1441,8 @@ class FloatVocabApp:
                 conn.row_factory = sqlite3.Row
                 news_digest.save_brief_to_favorites(conn, brief_id)
         except Exception as exc:
-            self.root.after(0, lambda: messagebox.showerror(APP_NAME, f"收藏日报失败：{exc}"))
+            error_message = f"收藏日报失败：{exc}"
+            self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
             return
         self.root.after(0, self._after_brief_saved)
 
