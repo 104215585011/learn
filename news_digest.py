@@ -138,29 +138,45 @@ def favorite_article_by_id(conn: sqlite3.Connection, article_id: int) -> sqlite3
 
 def save_brief_to_favorites(conn: sqlite3.Connection, brief_id: int) -> sqlite3.Row:
     ensure_schema(conn)
-    existing = conn.execute("SELECT * FROM favorite_articles WHERE brief_id = ?", (brief_id,)).fetchone()
-    if existing:
-        return existing
     brief = conn.execute("SELECT * FROM daily_briefs WHERE id = ?", (brief_id,)).fetchone()
     if not brief:
         raise ValueError("日报不存在")
+    existing = conn.execute(
+        """
+        SELECT *
+        FROM favorite_articles
+        WHERE brief_id = ? OR url = ?
+        ORDER BY CASE WHEN brief_id = ? THEN 0 ELSE 1 END, id
+        LIMIT 1
+        """,
+        (brief_id, brief["url"], brief_id),
+    ).fetchone()
+    if existing:
+        conn.execute("UPDATE daily_briefs SET saved = 1 WHERE id = ?", (brief_id,))
+        conn.commit()
+        return existing
     metadata = {
         "saved_from_brief_id": brief_id,
         "saved_at": datetime.now().isoformat(timespec="seconds"),
     }
+    used_summary_fallback = False
     try:
         content_text = fetch_article_content(brief["source_key"], brief["url"])
     except Exception as exc:
         content_text = build_fallback_content(brief)
+        used_summary_fallback = True
         metadata["content_error"] = str(exc)
         metadata["content_mode"] = "summary_fallback"
 
-    try:
-        bilingual_text = to_bilingual_text(content_text)
-    except Exception as exc:
+    if used_summary_fallback:
         bilingual_text = content_text
-        metadata["translation_error"] = str(exc)
-        metadata["translation_mode"] = "source_only"
+    else:
+        try:
+            bilingual_text = to_bilingual_text(content_text)
+        except Exception as exc:
+            bilingual_text = content_text
+            metadata["translation_error"] = str(exc)
+            metadata["translation_mode"] = "source_only"
     conn.execute(
         """
         INSERT INTO favorite_articles

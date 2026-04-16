@@ -1,5 +1,7 @@
 import shutil
+import sqlite3
 import tkinter.font as tkfont
+import time
 import unittest
 import uuid
 from datetime import date, timedelta
@@ -23,8 +25,15 @@ class AppLayoutTests(unittest.TestCase):
             self.assertIn("词库概览", tab_labels)
             self.assertIn("英语日报", tab_labels)
         finally:
-            ui.db.conn.close()
             ui.root.destroy()
+
+    def test_destroying_main_window_closes_database_connection(self):
+        ui = app.FloatVocabApp()
+        ui.root.update_idletasks()
+        ui.root.destroy()
+
+        with self.assertRaises(sqlite3.ProgrammingError):
+            ui.db.conn.execute("SELECT 1")
 
     def test_words_overview_loads_full_lexicon_instead_of_capping_at_80(self):
         temp_root = Path(app.APP_ROOT) / "tests" / "_tmp_ui_layout" / uuid.uuid4().hex
@@ -62,10 +71,16 @@ class AppLayoutTests(unittest.TestCase):
                     ui.refresh_words()
                     self.assertEqual(len(ui.words_tree.get_children()), 100)
                 finally:
-                    ui.db.conn.close()
-                    ui.root.destroy()
+                    ui.close()
         finally:
-            shutil.rmtree(temp_root)
+            for _ in range(5):
+                try:
+                    shutil.rmtree(temp_root, ignore_errors=False)
+                    break
+                except PermissionError:
+                    time.sleep(0.1)
+            else:
+                shutil.rmtree(temp_root, ignore_errors=True)
 
     def test_floating_window_keeps_action_buttons_visible_with_long_translation(self):
         ui = app.FloatVocabApp()
@@ -92,7 +107,6 @@ class AppLayoutTests(unittest.TestCase):
             self.assertTrue(ui.float_window.hint_label.winfo_ismapped())
             self.assertTrue(ui.float_window.drag_bar.winfo_ismapped())
         finally:
-            ui.db.conn.close()
             ui.root.destroy()
 
     def test_floating_window_uses_smaller_title_font_for_long_meaning_when_flipped(self):
@@ -123,7 +137,6 @@ class AppLayoutTests(unittest.TestCase):
             self.assertLessEqual(word_font_size, 22)
             self.assertGreater(word_font_size, detail_font_size)
         finally:
-            ui.db.conn.close()
             ui.root.destroy()
 
     def test_floating_window_prioritizes_meaning_over_example_for_dense_flipped_cards(self):
@@ -147,7 +160,6 @@ class AppLayoutTests(unittest.TestCase):
             self.assertIn("容纳", detail_text)
             self.assertNotIn("The hotel can accommodate", detail_text)
         finally:
-            ui.db.conn.close()
             ui.root.destroy()
 
 

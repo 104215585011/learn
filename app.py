@@ -1,4 +1,4 @@
-import csv
+﻿import csv
 import ctypes
 import ctypes.wintypes
 import json
@@ -8,11 +8,15 @@ import sqlite3
 import sys
 import threading
 import tkinter as tk
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from floatvocab.db import initialize_database, open_connection
+from floatvocab.models import WordCard
+from floatvocab.repositories import LexiconRepository, NewsRepository, PlanRepository, StudyRepository
+from floatvocab.services import EnrichmentService as _BaseEnrichmentService
+from floatvocab.services import NewsService, SettingsService, StudyService
 import news_digest
 from example_pipeline import enrich_database
 
@@ -65,194 +69,40 @@ THEME = {
 }
 
 
-@dataclass
-class WordCard:
-    id: int
-    word: str
-    phonetic: str
-    meaning: str
-    example: str
-    status: str
-    lexicon_name: str
+class EnrichmentService(_BaseEnrichmentService):
+    def __init__(self, db_path: Path):
+        super().__init__(db_path)
+
+    def enrich_examples(self, lexicon_id=None, limit: int = 200, refresh: bool = False):
+        return globals()["enrich_database"](self.db_path, limit=limit, refresh=refresh, lexicon_id=lexicon_id)
 
 
 class FloatVocabDB:
     def __init__(self, db_path: Path):
-        self.conn = sqlite3.connect(db_path)
-        self.conn.row_factory = sqlite3.Row
-        self.init_schema()
-        news_digest.ensure_schema(self.conn)
-        self.seed_builtin()
-        self.seed_exam_lexicons()
-
-    def init_schema(self):
-        self.conn.executescript(
-            """
-            PRAGMA journal_mode=WAL;
-
-            CREATE TABLE IF NOT EXISTS lexicons (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL UNIQUE,
-              source TEXT NOT NULL DEFAULT 'built-in',
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS words (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              lexicon_id INTEGER NOT NULL,
-              word TEXT NOT NULL,
-              phonetic TEXT DEFAULT '',
-              meaning TEXT NOT NULL,
-              example TEXT DEFAULT '',
-              example_source TEXT DEFAULT '',
-              example_updated_at TEXT,
-              example_attempted_at TEXT,
-              example_attempts INTEGER NOT NULL DEFAULT 0,
-              status TEXT NOT NULL DEFAULT 'new',
-              next_review_date TEXT NOT NULL,
-              interval_days INTEGER NOT NULL DEFAULT 0,
-              repetitions INTEGER NOT NULL DEFAULT 0,
-              ease_factor REAL NOT NULL DEFAULT 2.5,
-              seen_count INTEGER NOT NULL DEFAULT 0,
-              correct_count INTEGER NOT NULL DEFAULT 0,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              UNIQUE(lexicon_id, word),
-              FOREIGN KEY (lexicon_id) REFERENCES lexicons(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS plans (
-              id INTEGER PRIMARY KEY CHECK (id = 1),
-              lexicon_id INTEGER,
-              daily_new INTEGER NOT NULL DEFAULT 20,
-              target_date TEXT,
-              float_alpha REAL NOT NULL DEFAULT 0.88,
-              font_size INTEGER NOT NULL DEFAULT 26,
-              bg_color TEXT NOT NULL DEFAULT '#F7FAF5',
-              widget_size TEXT NOT NULL DEFAULT 'medium',
-              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (lexicon_id) REFERENCES lexicons(id) ON DELETE SET NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS reviews (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              word_id INTEGER NOT NULL,
-              rating INTEGER NOT NULL,
-              old_interval_days INTEGER NOT NULL,
-              new_interval_days INTEGER NOT NULL,
-              reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS daily_stats (
-              day TEXT PRIMARY KEY,
-              reviewed INTEGER NOT NULL DEFAULT 0,
-              known INTEGER NOT NULL DEFAULT 0,
-              unknown INTEGER NOT NULL DEFAULT 0,
-              new_seen INTEGER NOT NULL DEFAULT 0
-            );
-            """
+        self.db_path = db_path
+        self.conn = open_connection(db_path)
+        initialize_database(
+            self.conn,
+            builtin_lexicon=BUILTIN_LEXICON,
+            vocab_source_dir=VOCAB_SOURCE_DIR,
+            exam_lexicons=EXAM_LEXICONS,
+            qwerty_item_to_word=qwerty_item_to_word,
         )
-        self.ensure_plan_columns()
-        self.ensure_word_columns()
-        self.conn.execute(
-            "INSERT OR IGNORE INTO plans (id, lexicon_id, daily_new, target_date) VALUES (1, NULL, 20, ?)",
-            [(date.today() + timedelta(days=90)).isoformat()],
+        self.lexicon_repository = LexiconRepository(self.conn)
+        self.plan_repository = PlanRepository(self.conn)
+        self.study_repository = StudyRepository(
+            self.conn,
+            calculate_srs=calculate_srs,
+            row_to_card=row_to_card,
         )
-        self.conn.commit()
-
-    def ensure_plan_columns(self):
-        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(plans)").fetchall()}
-        if "widget_size" not in columns:
-            self.conn.execute("ALTER TABLE plans ADD COLUMN widget_size TEXT NOT NULL DEFAULT 'medium'")
-        if "current_word_id" not in columns:
-            self.conn.execute("ALTER TABLE plans ADD COLUMN current_word_id INTEGER")
-
-    def ensure_word_columns(self):
-        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(words)").fetchall()}
-        if "example_source" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_source TEXT DEFAULT ''")
-        if "example_updated_at" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_updated_at TEXT")
-        if "example_attempted_at" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_attempted_at TEXT")
-        if "example_attempts" not in columns:
-            self.conn.execute("ALTER TABLE words ADD COLUMN example_attempts INTEGER NOT NULL DEFAULT 0")
-
-    def seed_builtin(self):
-        if self.conn.execute("SELECT 1 FROM lexicons WHERE name = ?", ("考研核心 50",)).fetchone():
-            return
-        with BUILTIN_LEXICON.open("r", encoding="utf-8") as file:
-            words = json.load(file)
-        lexicon_id = self.create_lexicon("考研核心 50", "built-in")
-        today = date.today().isoformat()
-        for item in words:
-            self.conn.execute(
-                """
-                INSERT OR IGNORE INTO words
-                (lexicon_id, word, phonetic, meaning, example, next_review_date)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (lexicon_id, item["word"], item.get("phonetic", ""), item["meaning"], item.get("example", ""), today),
-            )
-        self.conn.execute("UPDATE plans SET lexicon_id = ? WHERE id = 1 AND lexicon_id IS NULL", (lexicon_id,))
-        self.conn.commit()
-
-    def seed_exam_lexicons(self):
-        if not VOCAB_SOURCE_DIR.exists():
-            return
-        today = date.today().isoformat()
-        for lexicon_name, file_name in EXAM_LEXICONS:
-            if self.conn.execute("SELECT 1 FROM lexicons WHERE name = ?", (lexicon_name,)).fetchone():
-                continue
-            source_path = VOCAB_SOURCE_DIR / file_name
-            if not source_path.exists():
-                continue
-            with source_path.open("r", encoding="utf-8") as file:
-                rows = json.load(file)
-            lexicon_id = self.create_lexicon(lexicon_name, "built-in")
-            for item in rows:
-                row = qwerty_item_to_word(item, lexicon_name)
-                if not row:
-                    continue
-                self.conn.execute(
-                    """
-                    INSERT OR IGNORE INTO words
-                    (lexicon_id, word, phonetic, meaning, example, next_review_date)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (lexicon_id, row["word"], row["phonetic"], row["meaning"], row["example"], today),
-                )
-        self.conn.commit()
-
-    def create_lexicon(self, name: str, source: str = "custom") -> int:
-        cursor = self.conn.execute("INSERT OR IGNORE INTO lexicons (name, source) VALUES (?, ?)", (name, source))
-        self.conn.commit()
-        if cursor.lastrowid:
-            return cursor.lastrowid
-        return self.conn.execute("SELECT id FROM lexicons WHERE name = ?", (name,)).fetchone()["id"]
+        self.news_repository = NewsRepository(self.conn)
+    def create_lexicon(self, name: str, source: str = 'custom') -> int:
+        return self.lexicon_repository.create_lexicon(name, source)
 
     def import_words(self, file_path: str) -> tuple[int, str]:
         path = Path(file_path)
-        lexicon_id = self.create_lexicon(path.stem, "import")
         rows = self.parse_word_file(path)
-        today = date.today().isoformat()
-        imported = 0
-        for row in rows:
-            word = row.get("word", "").strip()
-            meaning = row.get("meaning", "").strip()
-            if not word or not meaning:
-                continue
-            self.conn.execute(
-                """
-                INSERT OR IGNORE INTO words
-                (lexicon_id, word, phonetic, meaning, example, next_review_date)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (lexicon_id, word, row.get("phonetic", "").strip(), meaning, row.get("example", "").strip(), today),
-            )
-            imported += 1
-        self.conn.commit()
+        imported = self.lexicon_repository.import_word_rows(path.stem, rows, "import")
         return imported, path.stem
 
     @staticmethod
@@ -277,168 +127,31 @@ class FloatVocabDB:
         return rows
 
     def lexicons(self):
-        return self.conn.execute(
-            """
-            SELECT l.*,
-              COUNT(w.id) AS total,
-              SUM(CASE WHEN w.status = 'mastered' THEN 1 ELSE 0 END) AS mastered
-            FROM lexicons l
-            LEFT JOIN words w ON w.lexicon_id = l.id
-            GROUP BY l.id
-            ORDER BY l.created_at
-            """
-        ).fetchall()
+        return self.lexicon_repository.list_lexicons()
 
     def plan(self):
-        return self.conn.execute("SELECT * FROM plans WHERE id = 1").fetchone()
+        return self.plan_repository.fetch_plan()
 
     def save_plan(self, lexicon_id: int, daily_new: int, target_date: str, alpha: float, font_size: int, bg_color: str, widget_size: str):
-        current_plan = self.plan()
-        current_word_id = current_plan["current_word_id"] if "current_word_id" in current_plan.keys() else None
-        if current_plan["lexicon_id"] != lexicon_id:
-            current_word_id = None
-        self.conn.execute(
-            """
-            UPDATE plans
-            SET lexicon_id = ?, daily_new = ?, target_date = ?, float_alpha = ?,
-                font_size = ?, bg_color = ?, widget_size = ?, current_word_id = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = 1
-            """,
-            (lexicon_id, daily_new, target_date, alpha, font_size, bg_color, widget_size, current_word_id),
-        )
-        self.conn.commit()
+        self.plan_repository.save_plan(lexicon_id, daily_new, target_date, alpha, font_size, bg_color, widget_size)
 
     def save_float_style(self, alpha: float, font_size: int, bg_color: str, widget_size: str):
-        self.conn.execute(
-            """
-            UPDATE plans
-            SET float_alpha = ?, font_size = ?, bg_color = ?, widget_size = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = 1
-            """,
-            (alpha, font_size, bg_color, widget_size),
-        )
-        self.conn.commit()
+        self.plan_repository.save_float_style(alpha, font_size, bg_color, widget_size)
 
     def next_card(self) -> WordCard | None:
-        plan = self.plan()
-        lexicon_id = plan["lexicon_id"]
-        if not lexicon_id:
-            return None
-        current_word_id = plan["current_word_id"] if "current_word_id" in plan.keys() else None
-        if current_word_id:
-            current_card = self.conn.execute(
-                """
-                SELECT w.*, l.name AS lexicon_name
-                FROM words w JOIN lexicons l ON l.id = w.lexicon_id
-                WHERE w.id = ? AND w.lexicon_id = ? AND w.status != 'mastered'
-                """,
-                (current_word_id, lexicon_id),
-            ).fetchone()
-            if current_card:
-                return row_to_card(current_card)
-            self.conn.execute("UPDATE plans SET current_word_id = NULL WHERE id = 1")
-            self.conn.commit()
-        today = date.today().isoformat()
-        card = self.conn.execute(
-            """
-            SELECT w.*, l.name AS lexicon_name
-            FROM words w JOIN lexicons l ON l.id = w.lexicon_id
-            WHERE w.lexicon_id = ?
-              AND w.status != 'mastered'
-            ORDER BY
-              CASE WHEN w.next_review_date <= ? THEN 0 ELSE 1 END,
-              CASE WHEN w.repetitions = 0 THEN 1 ELSE 0 END,
-              w.next_review_date,
-              w.seen_count,
-              w.id
-            LIMIT 1
-            """,
-            (lexicon_id, today),
-        ).fetchone()
-        if card:
-            self.conn.execute("UPDATE plans SET current_word_id = ? WHERE id = 1", (card["id"],))
-            self.conn.commit()
-        return row_to_card(card) if card else None
+        return self.study_repository.next_card()
 
     def review(self, word_id: int, rating: int):
-        row = self.conn.execute("SELECT * FROM words WHERE id = ?", (word_id,)).fetchone()
-        if not row:
-            return
-        old_interval = row["interval_days"]
-        next_state = calculate_srs(row, rating)
-        status = STATUS_MASTERED if rating >= 4 and next_state["repetitions"] >= 3 else STATUS_FUZZY if rating >= 3 else STATUS_NEW
-        self.conn.execute(
-            """
-            UPDATE words
-            SET status = ?, next_review_date = ?, interval_days = ?, repetitions = ?,
-                ease_factor = ?, seen_count = seen_count + 1,
-                correct_count = correct_count + ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (
-                status,
-                next_state["next_review_date"],
-                next_state["interval_days"],
-                next_state["repetitions"],
-                next_state["ease_factor"],
-                1 if rating >= 3 else 0,
-                word_id,
-            ),
-        )
-        self.conn.execute(
-            "INSERT INTO reviews (word_id, rating, old_interval_days, new_interval_days) VALUES (?, ?, ?, ?)",
-            (word_id, rating, old_interval, next_state["interval_days"]),
-        )
-        today = date.today().isoformat()
-        self.conn.execute(
-            """
-            INSERT INTO daily_stats (day, reviewed, known, unknown, new_seen)
-            VALUES (?, 1, ?, ?, ?)
-            ON CONFLICT(day) DO UPDATE SET
-              reviewed = reviewed + 1,
-              known = known + excluded.known,
-              unknown = unknown + excluded.unknown,
-              new_seen = new_seen + excluded.new_seen
-            """,
-            (today, 1 if rating >= 3 else 0, 1 if rating < 3 else 0, 1 if row["seen_count"] == 0 else 0),
-        )
-        self.conn.execute("UPDATE plans SET current_word_id = NULL WHERE id = 1 AND current_word_id = ?", (word_id,))
-        self.conn.commit()
+        self.study_repository.review(word_id, rating)
 
     def stats(self):
-        plan = self.plan()
-        lexicon_id = plan["lexicon_id"]
-        if not lexicon_id:
-            return {}
-        summary = self.conn.execute(
-            """
-            SELECT
-              COUNT(*) AS total,
-              SUM(CASE WHEN status = 'mastered' THEN 1 ELSE 0 END) AS mastered,
-              SUM(CASE WHEN status = 'fuzzy' THEN 1 ELSE 0 END) AS fuzzy,
-              SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS fresh,
-              SUM(CASE WHEN next_review_date <= date('now', 'localtime') AND status != 'mastered' THEN 1 ELSE 0 END) AS due
-            FROM words
-            WHERE lexicon_id = ?
-            """,
-            (lexicon_id,),
-        ).fetchone()
-        days = self.conn.execute(
-            "SELECT * FROM daily_stats WHERE day >= ? ORDER BY day",
-            ((date.today() - timedelta(days=29)).isoformat(),),
-        ).fetchall()
-        return {"summary": summary, "days": days}
+        return self.study_repository.stats()
 
     def missing_examples_count(self, lexicon_id: int | None = None) -> int:
-        if lexicon_id:
-            row = self.conn.execute(
-                "SELECT COUNT(*) AS total FROM words WHERE lexicon_id = ? AND (example IS NULL OR TRIM(example) = '')",
-                (lexicon_id,),
-            ).fetchone()
-        else:
-            row = self.conn.execute("SELECT COUNT(*) AS total FROM words WHERE example IS NULL OR TRIM(example) = ''").fetchone()
-        return int(row["total"] or 0)
+        return self.study_repository.missing_examples_count(lexicon_id)
+
+    def recent_words(self, lexicon_id: int, limit: int = 80):
+        return self.lexicon_repository.recent_words(lexicon_id, limit)
 
 
 def row_to_word_dict(row):
@@ -536,7 +249,7 @@ class FloatingWindow(tk.Toplevel):
         self.overrideredirect(True)
         self.geometry("380x270+960+120")
 
-        self.panel_frame = tk.Frame(self, padx=16, pady=14, bd=0, relief="flat")
+        self.panel_frame = tk.Frame(self, padx=20, pady=18, bd=0, relief="flat")
         self.panel_frame.pack(fill="both", expand=True)
         self.panel_frame.columnconfigure(0, weight=1)
         self.panel_frame.rowconfigure(1, weight=1)
@@ -585,7 +298,7 @@ class FloatingWindow(tk.Toplevel):
         self.resize_grip.bind("<B1-Motion>", self.resize)
 
     def apply_style(self):
-        plan = self.app.db.plan()
+        plan = self.app.settings_service.get_plan_settings()
         bg = plan["bg_color"]
         alpha = float(plan["float_alpha"])
         font_size = int(plan["font_size"])
@@ -649,7 +362,7 @@ class FloatingWindow(tk.Toplevel):
         self.detail_label.configure(font=("Segoe UI", detail_font_size))
 
     def show_next(self):
-        self.card = self.app.db.next_card()
+        self.card = self.app.study_service.get_next_card()
         self.flipped = False
         self.apply_style()
         self.render()
@@ -774,13 +487,13 @@ class FloatingWindow(tk.Toplevel):
 
     def mark_known(self):
         if self.card:
-            self.app.db.review(self.card.id, 4)
+            self.app.study_service.submit_review(self.card.id, 4)
         self.app.refresh_all()
         self.show_next()
 
     def mark_unknown(self):
         if self.card:
-            self.app.db.review(self.card.id, 2)
+            self.app.study_service.submit_review(self.card.id, 2)
         self.app.refresh_all()
         self.show_next()
 
@@ -931,9 +644,25 @@ class GlobalHotkeys:
 
 
 class FloatVocabApp:
-    def __init__(self):
-        self.db = FloatVocabDB(DB_PATH)
+    def __init__(
+        self,
+        db: FloatVocabDB | None = None,
+        settings_service: SettingsService | None = None,
+        study_service: StudyService | None = None,
+        news_service: NewsService | None = None,
+        enrichment_service: EnrichmentService | None = None,
+    ):
+        self.db = db or FloatVocabDB(DB_PATH)
+        self.settings_service = settings_service or SettingsService(self.db)
+        self.study_service = study_service or StudyService(self.db)
+        service_db_path = getattr(self.db, "db_path", DB_PATH)
+        self.news_service = news_service or NewsService(service_db_path)
+        self.enrichment_service = enrichment_service or EnrichmentService(service_db_path)
         self.root = tk.Tk()
+        self._root_destroy = self.root.destroy
+        self.root.destroy = self.close
+        self.poll_after_id = None
+        self.closed = False
         self.configure_root()
         self.hotkey_events = queue.Queue()
         self.hotkeys = GlobalHotkeys(self.hotkey_events)
@@ -945,7 +674,139 @@ class FloatVocabApp:
         self.build_ui()
         self.refresh_all()
         self.hotkeys.start()
-        self.root.after(120, self.poll_hotkeys)
+        self.poll_after_id = self.root.after(120, self.poll_hotkeys)
+
+    def configure_root(self):
+        self.root.title("FloatVocab 悬浮背词")
+        self.root.geometry("1180x860")
+        self.root.minsize(1080, 760)
+        self.root.configure(bg=THEME["bg"])
+
+    def configure_styles(self):
+        self.style = ttk.Style()
+        self.style.theme_use("clam")
+        self.root.option_add("*Font", "{Segoe UI} 10")
+        self.style.configure("App.TFrame", background=THEME["bg"])
+        self.style.configure("Panel.TFrame", background=THEME["panel"])
+        self.style.configure("Hero.TFrame", background=THEME["hero"])
+        self.style.configure("PanelTitle.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 12, "bold"))
+        self.style.configure("HeroTitle.TLabel", background=THEME["hero"], foreground=THEME["text"], font=("Segoe UI", 24, "bold"))
+        self.style.configure("HeroBody.TLabel", background=THEME["hero"], foreground=THEME["muted"], font=("Segoe UI", 10))
+        self.style.configure("SectionLabel.TLabel", background=THEME["panel"], foreground=THEME["muted"], font=("Segoe UI", 9, "bold"))
+        self.style.configure("Body.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 10))
+        self.style.configure("Muted.TLabel", background=THEME["panel"], foreground=THEME["muted"], font=("Segoe UI", 9))
+        self.style.configure("Summary.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 11, "bold"))
+        self.style.configure(
+            "Primary.TButton",
+            background=THEME["accent"],
+            foreground="#FFFFFF",
+            borderwidth=0,
+            focusthickness=0,
+            font=("Segoe UI", 10, "bold"),
+            padding=(16, 10),
+        )
+        self.style.map("Primary.TButton", background=[("active", THEME["accent_active"])], foreground=[("disabled", "#DCE7F7")])
+        self.style.configure(
+            "Secondary.TButton",
+            background=THEME["panel_alt"],
+            foreground=THEME["accent_active"],
+            bordercolor=THEME["border"],
+            focusthickness=0,
+            padding=(14, 10),
+        )
+        self.style.map("Secondary.TButton", background=[("active", THEME["accent_soft"])])
+        self.style.configure(
+            "Quiet.TButton",
+            background=THEME["panel"],
+            foreground=THEME["text"],
+            bordercolor=THEME["border"],
+            focusthickness=0,
+            padding=(12, 9),
+        )
+        self.style.map("Quiet.TButton", background=[("active", "#F6FAFF")])
+        self.style.configure(
+            "App.Horizontal.TProgressbar",
+            troughcolor="#E3EEF9",
+            background=THEME["accent"],
+            bordercolor="#E3EEF9",
+            lightcolor=THEME["accent"],
+            darkcolor=THEME["accent"],
+        )
+        self.style.configure(
+            "Treeview",
+            background=THEME["panel"],
+            fieldbackground=THEME["panel"],
+            foreground=THEME["text"],
+            rowheight=30,
+            bordercolor=THEME["border"],
+            lightcolor=THEME["panel"],
+            darkcolor=THEME["panel"],
+        )
+        self.style.map("Treeview", background=[("selected", THEME["accent_soft"])], foreground=[("selected", THEME["text"])])
+        self.style.configure(
+            "Treeview.Heading",
+            background=THEME["panel_alt"],
+            foreground=THEME["text"],
+            relief="flat",
+            borderwidth=0,
+            font=("Segoe UI", 10, "bold"),
+            padding=(8, 8),
+        )
+        self.style.map("Treeview.Heading", background=[("active", "#E4F0FF")])
+        self.style.configure(
+            "TCombobox",
+            fieldbackground=THEME["panel"],
+            background=THEME["panel"],
+            bordercolor=THEME["border"],
+            lightcolor=THEME["border"],
+            darkcolor=THEME["border"],
+            arrowsize=16,
+            padding=6,
+        )
+        self.style.configure(
+            "TEntry",
+            fieldbackground=THEME["panel"],
+            bordercolor=THEME["border"],
+            lightcolor=THEME["border"],
+            darkcolor=THEME["border"],
+            padding=6,
+        )
+        self.style.configure(
+            "TSpinbox",
+            fieldbackground=THEME["panel"],
+            bordercolor=THEME["border"],
+            lightcolor=THEME["border"],
+            darkcolor=THEME["border"],
+            padding=6,
+        )
+        self.style.configure(
+            "Horizontal.TScale",
+            background=THEME["panel"],
+            troughcolor="#DCE8F5",
+            bordercolor=THEME["panel"],
+            lightcolor=THEME["accent"],
+            darkcolor=THEME["accent"],
+        )
+        self.style.configure("TNotebook", background=THEME["panel"], borderwidth=0, tabmargins=(0, 0, 0, 0))
+        self.style.configure(
+            "TNotebook.Tab",
+            background=THEME["panel_alt"],
+            foreground=THEME["muted"],
+            padding=(16, 10),
+            borderwidth=0,
+        )
+        self.style.map(
+            "TNotebook.Tab",
+            background=[("selected", THEME["panel"]), ("active", THEME["accent_soft"])],
+            foreground=[("selected", THEME["text"]), ("active", THEME["text"])],
+        )
+
+    def create_panel(self, parent, title: str, subtitle: str | None = None):
+        panel = ttk.Frame(parent, style="Panel.TFrame", padding=18)
+        ttk.Label(panel, text=title, style="PanelTitle.TLabel").pack(anchor="w")
+        if subtitle:
+            ttk.Label(panel, text=subtitle, style="Muted.TLabel", wraplength=460, justify="left").pack(anchor="w", pady=(4, 14))
+        return panel
 
     def configure_root(self):
         self.root.title("FloatVocab 悬浮背词")
@@ -1280,7 +1141,7 @@ class FloatVocabApp:
         self.lexicons = self.db.lexicons()
         values = [f"{row['id']} · {row['name']} ({row['mastered'] or 0}/{row['total'] or 0})" for row in self.lexicons]
         self.lexicon_combo["values"] = values
-        plan = self.db.plan()
+        plan = self.settings_service.get_plan_settings()
         self.loading_plan = True
         for index, row in enumerate(self.lexicons):
             if row["id"] == plan["lexicon_id"]:
@@ -1309,7 +1170,7 @@ class FloatVocabApp:
         except ValueError:
             messagebox.showwarning(APP_NAME, "目标日期格式应为 YYYY-MM-DD。")
             return
-        self.db.save_plan(
+        self.settings_service.save_plan(
             lexicon_id,
             int(self.daily_new_var.get()),
             target_date,
@@ -1333,7 +1194,7 @@ class FloatVocabApp:
         bg_color = self.bg_color_var.get().strip() or "#F7FAF5"
         if not self.valid_tk_color(bg_color):
             return
-        self.db.save_float_style(
+        self.settings_service.save_float_style(
             float(self.alpha_var.get()),
             int(self.font_size_var.get()),
             bg_color,
@@ -1365,17 +1226,17 @@ class FloatVocabApp:
         self.refresh_all()
 
     def refresh_example_status(self):
-        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
-        missing = self.db.missing_examples_count(lexicon_id)
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
+        missing = self.study_service.missing_examples_count(lexicon_id)
         self.example_status_label.configure(text=f"当前词库还缺 {missing} 条例句")
 
     def enrich_examples(self):
-        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
         self.example_status_label.configure(text="正在补全例句...")
 
         def worker():
             try:
-                result = enrich_database(DB_PATH, limit=200, refresh=False, lexicon_id=lexicon_id)
+                result = self.enrichment_service.enrich_examples(lexicon_id=lexicon_id, limit=200, refresh=False)
             except Exception as exc:
                 error_message = f"例句补全失败：{exc}"
                 self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1399,7 +1260,7 @@ class FloatVocabApp:
             self.bg_color_var.set(color)
 
     def refresh_stats(self):
-        stats = self.db.stats()
+        stats = self.study_service.get_study_stats()
         if not stats:
             return
         summary = stats["summary"]
@@ -1440,13 +1301,10 @@ class FloatVocabApp:
     def refresh_words(self):
         for item in self.words_tree.get_children():
             self.words_tree.delete(item)
-        lexicon_id = self.selected_lexicon_id() or self.db.plan()["lexicon_id"]
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
         if not lexicon_id:
             return
-        rows = self.db.conn.execute(
-            "SELECT word, meaning, status FROM words WHERE lexicon_id = ? ORDER BY updated_at DESC, id",
-            (lexicon_id,),
-        ).fetchall()
+        rows = self.study_service.get_recent_words(lexicon_id, limit=5000)
         for row in rows:
             self.words_tree.insert("", "end", values=(row["word"], row["meaning"], status_text(row["status"])))
 
@@ -1455,9 +1313,7 @@ class FloatVocabApp:
 
     def _refresh_daily_briefs_worker(self):
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.row_factory = sqlite3.Row
-                news_digest.refresh_latest_briefs(conn, limit=10)
+            self.news_service.refresh_latest_briefs(limit=10)
         except Exception as exc:
             error_message = f"刷新日报失败：{exc}"
             self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1469,7 +1325,7 @@ class FloatVocabApp:
             return
         for item in self.brief_tree.get_children():
             self.brief_tree.delete(item)
-        rows = news_digest.latest_briefs(self.db.conn, limit=10)
+        rows = self.news_service.list_latest_briefs(limit=10)
         for row in rows:
             published = (row["published_at"] or "")[:16].replace("T", " ")
             saved_tag = " 已收藏" if row["saved"] else ""
@@ -1485,7 +1341,7 @@ class FloatVocabApp:
         if not brief_id:
             self.update_text_widget(self.brief_summary, "")
             return
-        row = self.db.conn.execute("SELECT * FROM daily_briefs WHERE id = ?", (brief_id,)).fetchone()
+        row = self.news_service.get_brief(brief_id)
         if not row:
             self.update_text_widget(self.brief_summary, "")
             return
@@ -1502,9 +1358,7 @@ class FloatVocabApp:
 
     def _save_selected_brief_worker(self, brief_id: int):
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.row_factory = sqlite3.Row
-                news_digest.save_brief_to_favorites(conn, brief_id)
+            self.news_service.save_brief_to_favorites(brief_id)
         except Exception as exc:
             error_message = f"收藏日报失败：{exc}"
             self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1521,7 +1375,7 @@ class FloatVocabApp:
             return
         for item in self.favorite_tree.get_children():
             self.favorite_tree.delete(item)
-        rows = news_digest.favorite_articles(self.db.conn)
+        rows = self.news_service.list_favorite_articles()
         for row in rows:
             saved = (row["saved_at"] or "")[:16].replace("T", " ")
             self.favorite_tree.insert("", "end", iid=str(row["id"]), values=(row["source_name"], saved, row["title"]))
@@ -1530,7 +1384,7 @@ class FloatVocabApp:
         selection = self.favorite_tree.selection()
         if not selection:
             return
-        article = news_digest.favorite_article_by_id(self.db.conn, int(selection[0]))
+        article = self.news_service.get_favorite_article(int(selection[0]))
         if article:
             self.article_window.show_article(article)
 
@@ -1542,6 +1396,8 @@ class FloatVocabApp:
         widget.configure(state="disabled")
 
     def poll_hotkeys(self):
+        if self.closed or not self.root.winfo_exists():
+            return
         while True:
             try:
                 event_id = self.hotkey_events.get_nowait()
@@ -1553,7 +1409,27 @@ class FloatVocabApp:
                 self.float_window.mark_unknown()
             elif event_id == 3:
                 self.float_window.flip()
-        self.root.after(120, self.poll_hotkeys)
+        self.poll_after_id = self.root.after(120, self.poll_hotkeys)
+
+    def close(self):
+        if self.closed:
+            if self.root.winfo_exists():
+                self._root_destroy()
+            return
+        self.closed = True
+        if self.poll_after_id:
+            try:
+                self.root.after_cancel(self.poll_after_id)
+            except tk.TclError:
+                pass
+            self.poll_after_id = None
+        if hasattr(self, "db") and getattr(self.db, "conn", None) is not None:
+            try:
+                self.db.conn.close()
+            except sqlite3.Error:
+                pass
+        if self.root.winfo_exists():
+            self._root_destroy()
 
     def run(self):
         self.root.mainloop()
@@ -1567,6 +1443,23 @@ def status_text(status: str) -> str:
     }.get(status, status)
 
 
+__all__ = [
+    "EnrichmentService",
+    "FloatVocabApp",
+    "FloatVocabDB",
+    "NewsService",
+    "SettingsService",
+    "StudyService",
+    "WordCard",
+    "calculate_srs",
+    "main",
+    "qwerty_item_to_word",
+    "row_to_card",
+    "row_to_word_dict",
+    "status_text",
+]
+
+
 def main():
     app = FloatVocabApp()
     app.run()
@@ -1574,3 +1467,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
