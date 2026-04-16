@@ -1,0 +1,46 @@
+[
+  {
+    "word": "motivate",
+    "phonetic": "/ˈməʊtɪveɪt/",
+    "phonetics": [
+      {
+        "text": "/ˈməʊtɪveɪt/",
+        "audio": ""
+      },
+      {
+        "text": "/ˈmoʊtɪveɪt/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To provide someone with an incentive to do something; to encourage.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The weekly staff meeting was meant to motivate employees."
+          },
+          {
+            "definition": "To animate; to propel; to cause to take action",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "He was motivated purely by self-interest."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": [
+          "demotivate"
+        ]
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/motivate"
+    ]
+  }
+]

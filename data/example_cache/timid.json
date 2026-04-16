@@ -1,0 +1,59 @@
+[
+  {
+    "word": "timid",
+    "phonetic": "/ˈtɪmɪd/",
+    "phonetics": [
+      {
+        "text": "/ˈtɪmɪd/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/timid-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=1780444",
+        "license": {
+          "name": "BY-SA 3.0",
+          "url": "https://creativecommons.org/licenses/by-sa/3.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Lacking in courage or confidence.",
+            "synonyms": [
+              "fearful",
+              "shy",
+              "timorous"
+            ],
+            "antonyms": [
+              "aggressive",
+              "bellicose",
+              "daredevil",
+              "dauntless",
+              "reckless"
+            ],
+            "example": "John's a very timid person. I'll doubt he'll be brave enough to face his brother."
+          }
+        ],
+        "synonyms": [
+          "fearful",
+          "shy",
+          "timorous"
+        ],
+        "antonyms": [
+          "aggressive",
+          "bellicose",
+          "daredevil",
+          "dauntless",
+          "reckless"
+        ]
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/timid"
+    ]
+  }
+]

@@ -1,0 +1,84 @@
+[
+  {
+    "word": "exterior",
+    "phonetic": "/ɛkˈstɪəɹɪə/",
+    "phonetics": [
+      {
+        "text": "/ɛkˈstɪəɹɪə/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/exterior-uk.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=86873138",
+        "license": {
+          "name": "BY-SA 4.0",
+          "url": "https://creativecommons.org/licenses/by-sa/4.0"
+        }
+      },
+      {
+        "text": "/ɛkˈstɪɹiɚ/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "The outside part, parts or surface of something.",
+            "synonyms": [],
+            "antonyms": [
+              "inside",
+              "interior"
+            ],
+            "example": "The sticker was attached to the exterior of the package"
+          },
+          {
+            "definition": "Foreign lands.",
+            "synonyms": [],
+            "antonyms": [
+              "interior"
+            ],
+            "example": "She is our new minister of the exterior"
+          }
+        ],
+        "synonyms": [],
+        "antonyms": [
+          "inside",
+          "interior",
+          "interior"
+        ]
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Relating to the outside parts or surface of something.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "the exterior part of a sphere"
+          },
+          {
+            "definition": "Being from outside a country; foreign.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "the exterior relations of a state or kingdom"
+          },
+          {
+            "definition": "Outdoor.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": [
+          "interior"
+        ]
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/exterior"
+    ]
+  }
+]

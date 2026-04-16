@@ -1,0 +1,80 @@
+[
+  {
+    "word": "blueprint",
+    "phonetic": "/ˈbluːˌpɹɪnt/",
+    "phonetics": [
+      {
+        "text": "/ˈbluːˌpɹɪnt/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/blueprint-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=1779939",
+        "license": {
+          "name": "BY-SA 3.0",
+          "url": "https://creativecommons.org/licenses/by-sa/3.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A type of paper-based reproduction process producing white-on-blue images, used primarily for technical and architecture's drawings, now largely replaced by other technologies.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A print produced with this process.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "(by extension) A detailed technical drawing (now often in some electronically storable and transmissible form).",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "(by extension) Any detailed plan, whether literal or figurative.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "schematic",
+          "layout",
+          "plan",
+          "road map",
+          "schematic",
+          "cyanotype",
+          "schematic"
+        ],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To make a blueprint for.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The architect blueprinted the renovation plan once the client had signed off."
+          },
+          {
+            "definition": "To make a detailed operational plan for.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "They blueprinted every aspect of the first phase of the operation."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/blueprint"
+    ]
+  }
+]

@@ -1,0 +1,39 @@
+[
+  {
+    "word": "spaceship",
+    "phonetics": [],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A vehicle that flies through space.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A finite pattern that reappears after a certain number of generations in the same orientation but in a different position.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The operator <=> in the Perl, PHP and Ruby programming languages, which compares two values and indicates whether the first is lesser than, greater than, or equal to the second.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "spacecraft"
+        ],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/spaceship"
+    ]
+  }
+]

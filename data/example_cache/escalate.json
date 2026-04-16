@@ -1,0 +1,44 @@
+[
+  {
+    "word": "escalate",
+    "phonetic": "/ˈɛs.kə.leɪt/",
+    "phonetics": [
+      {
+        "text": "/ˈɛs.kə.leɪt/",
+        "audio": ""
+      },
+      {
+        "text": "/ˈɛs.kə.leɪt/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To increase (something) in extent or intensity; to intensify or step up.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The shooting escalated the existing hostility."
+          },
+          {
+            "definition": "In technical support, to transfer a customer, a problem, etc. to the next higher level of authority",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The tech 1 escalated the caller to a tech 2."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/escalate"
+    ]
+  }
+]

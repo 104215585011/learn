@@ -1,0 +1,72 @@
+[
+  {
+    "word": "freelance",
+    "phonetic": "/ˈfɹiːlɑːns/",
+    "phonetics": [
+      {
+        "text": "/ˈfɹiːlɑːns/",
+        "audio": ""
+      },
+      {
+        "text": "/ˈfɹiˌlæns/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "Someone who sells their services to clients without a long-term employment contract.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A medieval mercenary.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To work as a freelance.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To produce or sell services as a freelance.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Of, or relating to a freelance; without employment contract.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "He was a freelance writer for several magazines."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/freelance"
+    ]
+  }
+]

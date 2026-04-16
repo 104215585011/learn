@@ -1,0 +1,81 @@
+[
+  {
+    "word": "orientation",
+    "phonetic": "/ˌɔɹiɛnˈteɪʃən/",
+    "phonetics": [
+      {
+        "text": "/ˌɔɹiɛnˈteɪʃən/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "The determination of the relative position of something or someone.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The relative physical position or direction of something.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The construction of a Christian church to have its aisle in an east-west direction with the altar at the east end.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "An inclination, tendency or direction.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The ability to orient.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The homing instinct in pigeons is an example of orientation."
+          },
+          {
+            "definition": "An adjustment to a new environment.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "An introduction to a (new) environment.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The direction of print across the page; landscape or portrait.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The choice of which ordered bases are \"positively\" oriented and which are \"negatively\" oriented on a real vector space.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The designation of a parametrised curve as \"positively\" or \"negatively\" oriented (or \"nonorientable\"); the analogous description of a surface or hypersurface.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": [
+          "disorientation"
+        ]
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/orientation"
+    ]
+  }
+]

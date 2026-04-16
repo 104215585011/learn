@@ -1,0 +1,44 @@
+[
+  {
+    "word": "litre",
+    "phonetic": "/ˈliː.tə/",
+    "phonetics": [
+      {
+        "text": "/ˈliː.tə/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/litre-uk.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=799946"
+      },
+      {
+        "text": "/ˈli.tɚ/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "The metric unit of fluid measure, equal to one cubic decimetre. Symbols: l, L, ℓ",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "You should be able to fill four cups with one litre of water."
+          },
+          {
+            "definition": "A measure of volume equivalent to a litre.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/litre"
+    ]
+  }
+]

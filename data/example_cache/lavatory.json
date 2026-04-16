@@ -1,0 +1,97 @@
+[
+  {
+    "word": "lavatory",
+    "phonetic": "/ˈlæv.ə.təɹ.i/",
+    "phonetics": [
+      {
+        "text": "/ˈlæv.ə.təɹ.i/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/lavatory-uk.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=88675768",
+        "license": {
+          "name": "BY-SA 4.0",
+          "url": "https://creativecommons.org/licenses/by-sa/4.0"
+        }
+      },
+      {
+        "text": "/ˈlæv.ə.tɔɹ.i/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A vessel or fixture for washing, particularly:",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "Handwashing, particularly",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A liquid used in washing; a lotion; a wash; a rinse.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A washroom: a room used for washing the face and hands.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A room containing a toilet: a bathroom (US) or WC (UK).",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A plumbing fixture for urination and defecation: a toilet.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A place to wash clothes: a laundry.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A place where gold is panned.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A paved room in a mortuary where corpses are kept under a shower of disinfecting fluid.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "washbasin",
+          "sink"
+        ],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Washing, or cleansing by washing.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/lavatory"
+    ]
+  }
+]

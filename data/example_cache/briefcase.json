@@ -1,0 +1,40 @@
+[
+  {
+    "word": "briefcase",
+    "phonetic": "/ˈbɹiːfˌkeɪs/",
+    "phonetics": [
+      {
+        "text": "/ˈbɹiːfˌkeɪs/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A case used for carrying documents, especially for business.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "In Microsoft Windows, a folder that supports file synchronization between itself and another folder.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "attaché case"
+        ],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/briefcase"
+    ]
+  }
+]

@@ -1,0 +1,29 @@
+[
+  {
+    "word": "passerby",
+    "phonetics": [],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A person who is passing by (that is, walking past).",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "When he tripped and fell in the street, several kind passers-by helped him up."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/passer-by",
+      "https://en.wiktionary.org/wiki/passerby"
+    ]
+  }
+]

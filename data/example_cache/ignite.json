@@ -1,0 +1,49 @@
+[
+  {
+    "word": "ignite",
+    "phonetic": "/ɪɡˈnaɪt/",
+    "phonetics": [
+      {
+        "text": "/ɪɡˈnaɪt/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To set fire to (something), to light (something)",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To spark off (something), to trigger",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To commence burning.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To subject to the action of intense heat; to heat strongly; often said of incombustible or infusible substances.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "to ignite iron or platinum"
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/ignite"
+    ]
+  }
+]

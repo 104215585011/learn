@@ -1,0 +1,75 @@
+[
+  {
+    "word": "highjack",
+    "phonetics": [],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "An instance of hijacking; the illegal seizure of a vehicle; a hijacking.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "An instance of a seizure and redirection of a process.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "An amendment which deletes the contents of a bill and inserts entirely new provisions.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "Preflop, the position two before the dealer.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To forcibly stop and seize control of some vehicle in order to rob it or to reach a destination (especially an airplane, truck or a boat).",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To seize control of some process or resource to achieve a purpose other than its originally intended one.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To seize control of a networked computer by means of infecting it with a worm or other malware, thereby turning it into a zombie.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To change software settings without a user's knowledge so as to force that user to visit a certain web site (to hijack a browser).",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To introduce an amendment deleting the contents of a bill and inserting entirely new provisions.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/highjack",
+      "https://en.wiktionary.org/wiki/hijack"
+    ]
+  }
+]

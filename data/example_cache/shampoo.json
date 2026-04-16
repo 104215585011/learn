@@ -1,0 +1,99 @@
+[
+  {
+    "word": "shampoo",
+    "phonetic": "/ʃamˈpuː/",
+    "phonetics": [
+      {
+        "text": "/ʃamˈpuː/",
+        "audio": ""
+      },
+      {
+        "text": "/ʃæmˈpuː/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/shampoo-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=49882522",
+        "license": {
+          "name": "BY-SA 4.0",
+          "url": "https://creativecommons.org/licenses/by-sa/4.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A traditional Indian and Persian body massage given after pouring warm water over the body and rubbing it with extracts from herbs.",
+            "synonyms": [
+              "massage"
+            ],
+            "antonyms": []
+          },
+          {
+            "definition": "A commercial liquid soap product for washing hair or other fibres/fibers, such as carpets.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "An instance of washing the hair or other fibres with shampoo.",
+            "synonyms": [
+              "shampooing"
+            ],
+            "antonyms": [],
+            "example": "I’m going to give the carpet a shampoo."
+          },
+          {
+            "definition": "Champagne.",
+            "synonyms": [
+              "bubbly",
+              "champers",
+              "fizz"
+            ],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "bubbly",
+          "champers",
+          "fizz",
+          "massage",
+          "shampooing"
+        ],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To wash one's own hair with shampoo.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "My neat-freak of a friend has been compulsively shampooing for every bath he has taken."
+          },
+          {
+            "definition": "To wash (i.e. the hair, carpet, etc.) with shampoo.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To press or knead the whole surface of the body of (a person), and at the same time to stretch the limbs and joints, in connection with the hot bath.",
+            "synonyms": [
+              "massage"
+            ],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "massage"
+        ],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/shampoo"
+    ]
+  }
+]

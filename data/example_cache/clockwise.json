@@ -1,0 +1,64 @@
+[
+  {
+    "word": "clockwise",
+    "phonetic": "/ˈklɒkwaɪz/",
+    "phonetics": [
+      {
+        "text": "/ˈklɒkwaɪz/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/clockwise-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=1769630",
+        "license": {
+          "name": "BY-SA 3.0",
+          "url": "https://creativecommons.org/licenses/by-sa/3.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Moving clockwise; having rotary motion in the manner of a clock.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "In the southern hemisphere the flow of air around a low-pressure system is clockwise."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adverb",
+        "definitions": [
+          {
+            "definition": "In a curve or twist corresponding to the movement of the hands of a clock.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "CW",
+          "deasil",
+          "dextrorotatory",
+          "sunwise"
+        ],
+        "antonyms": [
+          "ACW",
+          "anticlockwise",
+          "CCW",
+          "counter-clockwise",
+          "counterclockwise",
+          "widdershins",
+          "withershins"
+        ]
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/clockwise"
+    ]
+  }
+]

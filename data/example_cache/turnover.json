@@ -1,0 +1,84 @@
+[
+  {
+    "word": "turnover",
+    "phonetics": [
+      {
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/turnover-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=1770088",
+        "license": {
+          "name": "BY-SA 3.0",
+          "url": "https://creativecommons.org/licenses/by-sa/3.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "The amount of money taken as sales transacted in a given period.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The company had an annual turnover of $500,000."
+          },
+          {
+            "definition": "The frequency with which stock is replaced after being used or sold, workers leave and are replaced, a property changes hands, etc.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "High staff-turnover can lead to low morale amongst employees"
+          },
+          {
+            "definition": "A semicircular pastry made by turning one half of a circular crust over the other, enclosing the filling (usually fruit).",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "They only served me one apple turnover for breakfast."
+          },
+          {
+            "definition": "A loss of possession of the ball without scoring.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The Nimrods committed another dismaying turnover en route to another humiliating loss."
+          },
+          {
+            "definition": "A measure of leg speed: the frequency with which one takes strides when running, typically given in strides per minute.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The act or result of overturning something; an upset.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "a bad turnover in a carriage"
+          },
+          {
+            "definition": "An apprentice, in any trade, who is handed over from one master to another to complete his time.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Capable of being turned over; designed to be turned over.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "a turnover collar"
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/turnover"
+    ]
+  }
+]

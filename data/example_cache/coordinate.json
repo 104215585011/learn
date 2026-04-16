@@ -1,0 +1,70 @@
+[
+  {
+    "word": "coordinate",
+    "phonetics": [],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A number representing the position of a point along a line, arc, or similar one-dimensional figure.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "Give me your coordinates and we'll come and rescue you."
+          },
+          {
+            "definition": "Something that is equal to another thing.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "(in the plural) Coordinated clothes.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To synchronize (activities).",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "I was playing tennis for the first time, and it was difficult to coordinate."
+          },
+          {
+            "definition": "To match (objects, especially clothes).",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The outfit you're wearing doesn't coordinate."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Of the same rank; equal.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "two coordinate terms"
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/coordinate"
+    ]
+  }
+]

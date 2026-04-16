@@ -1,0 +1,34 @@
+[
+  {
+    "word": "voltage",
+    "phonetic": "/voʊltɪdʒ/",
+    "phonetics": [
+      {
+        "text": "/voʊltɪdʒ/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "The difference in electrostatic potential between two points in space, especially between live and neutral conductors or the earth.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "Be careful when opening high-voltage equipment."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/voltage"
+    ]
+  }
+]

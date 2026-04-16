@@ -1,0 +1,54 @@
+[
+  {
+    "word": "audio",
+    "phonetic": "/ˈɔː.di.əʊ/",
+    "phonetics": [
+      {
+        "text": "/ˈɔː.di.əʊ/",
+        "audio": ""
+      },
+      {
+        "text": "/ˈɔ.di.oʊ/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/audio-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=3899033",
+        "license": {
+          "name": "BY-SA 3.0",
+          "url": "https://creativecommons.org/licenses/by-sa/3.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A sound, or a sound signal",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Focused on audible sound, as opposed to sight.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/audio"
+    ]
+  }
+]

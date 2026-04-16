@@ -1,0 +1,38 @@
+[
+  {
+    "word": "envisage",
+    "phonetic": "/ɛnˈvɪzɪdʒ/",
+    "phonetics": [
+      {
+        "text": "/ɛnˈvɪzɪdʒ/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/envisage-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=1784112",
+        "license": {
+          "name": "BY-SA 3.0",
+          "url": "https://creativecommons.org/licenses/by-sa/3.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To conceive or see something within one's mind; to imagine or envision.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/envisage"
+    ]
+  }
+]

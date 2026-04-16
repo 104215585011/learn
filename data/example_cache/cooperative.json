@@ -1,0 +1,54 @@
+[
+  {
+    "word": "cooperative",
+    "phonetics": [],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A type of company that is owned partially or wholly by its employees, customers or tenants.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Ready to work with another person or in a team; ready to cooperate.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The patient was rarely cooperative, and tended to refuse treatment."
+          },
+          {
+            "definition": "Involving cooperation between individuals or parties.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "a cooperative business enterprise"
+          },
+          {
+            "definition": "Relating to a cooperative or cooperatives.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": [
+          "adversarial",
+          "competitive"
+        ]
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/cooperative"
+    ]
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "word": "x-ray",
+    "phonetics": [],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "Short wavelength electromagnetic radiation usually produced by bombarding a metal target in a vacuum. Used to create images of the internal structure of objects; this is possible because X-rays pass through most objects and can expose photographic film.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "X-rays are light with a wavelength between 0.1 and 10 nm."
+          },
+          {
+            "definition": "A radiograph: a photograph made with X-rays.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "\"The doctor ordered some X-rays of my injured wrist.\""
+          },
+          {
+            "definition": "An X-ray machine.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "The letter X in the ICAO spelling alphabet.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [
+          "Roentgen radiation",
+          "Rontgen radiation",
+          "Röntgen radiation",
+          "Roentgen rays",
+          "Rontgen rays",
+          "Röntgen rays",
+          "X-ray radiation"
+        ],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To take a radiograph of; to obtain an image of using X-ray radiation, especially for the purpose of medical diagnostic evaluation.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "Of course there was nothing wrong with my left wrist. They X-rayed the wrong arm!"
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/X-ray",
+      "https://en.wiktionary.org/wiki/x-ray"
+    ]
+  }
+]

@@ -1,0 +1,77 @@
+[
+  {
+    "word": "cloak",
+    "phonetic": "/ˈkloʊk/",
+    "phonetics": [
+      {
+        "text": "/ˈkloʊk/",
+        "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/cloak-us.mp3",
+        "sourceUrl": "https://commons.wikimedia.org/w/index.php?curid=2100651",
+        "license": {
+          "name": "BY-SA 3.0",
+          "url": "https://creativecommons.org/licenses/by-sa/3.0"
+        }
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A long outer garment worn over the shoulders covering the back; a cape, often with a hood.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A blanket-like covering, often metaphorical.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "Night hid her movements with its cloak of darkness."
+          },
+          {
+            "definition": "That which conceals; a disguise or pretext.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A text replacement for an IRC user's hostname or IP address, making the user less identifiable.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "verb",
+        "definitions": [
+          {
+            "definition": "To cover as with a cloak.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To hide or conceal.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "To render or become invisible via futuristic technology.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The ship cloaked before entering the enemy sector of space."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/cloak"
+    ]
+  }
+]

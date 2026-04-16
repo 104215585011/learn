@@ -1,0 +1,106 @@
+[
+  {
+    "word": "sideways",
+    "phonetic": "/ˈsaɪdweɪz/",
+    "phonetics": [
+      {
+        "text": "/ˈsaɪdweɪz/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A footpath near a road.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A byway.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Moving or directed toward one side.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "He gave the ball a sideways kick."
+          },
+          {
+            "definition": "Positioned sideways (with a side to the front).",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "There was a stack of papers in front of each seat at the table, but each stack was sideways."
+          },
+          {
+            "definition": "Neither moving upward nor moving downward.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "Once we get out of this sideways economy, our figures will more accurately reflect what we're truly capable of."
+          },
+          {
+            "definition": "Not as planned; towards a worse outcome.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "We realized the project could go sideways very quickly if we didn't get the sales and marketing people on our side."
+          },
+          {
+            "definition": "(usually with \"with\") In conflict (with); not compatible (with).",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "He was constantly getting sideways with his boss till he got fired."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      },
+      {
+        "partOfSpeech": "adverb",
+        "definitions": [
+          {
+            "definition": "With a side to the front.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "He builds houses sideways, with the front door on the side."
+          },
+          {
+            "definition": "Towards one side.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "A bishop moves only diagonally; a rook, only sideways, forward, and back.  He looked sideways at the new arrival, wondering who she was."
+          },
+          {
+            "definition": "Askance; sidelong.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "Neither upward nor downward.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "The economy has been moving sideways for several months now."
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/sideway",
+      "https://en.wiktionary.org/wiki/sideways"
+    ]
+  }
+]

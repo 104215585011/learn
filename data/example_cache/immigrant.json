@@ -1,0 +1,52 @@
+[
+  {
+    "word": "immigrant",
+    "phonetic": "/ˈɪmɪɡɹənt/",
+    "phonetics": [
+      {
+        "text": "/ˈɪmɪɡɹənt/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "noun",
+        "definitions": [
+          {
+            "definition": "A non-native person who comes to a country from another country in order to permanently settle there.",
+            "synonyms": [],
+            "antonyms": []
+          },
+          {
+            "definition": "A plant or animal that establishes itself in an area where it previously did not exist.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": [
+          "emigrant"
+        ]
+      },
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Of or relating to immigrants or the act of immigrating.",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ],
+        "synonyms": [],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/immigrant"
+    ]
+  }
+]

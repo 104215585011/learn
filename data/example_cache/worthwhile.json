@@ -1,0 +1,36 @@
+[
+  {
+    "word": "worthwhile",
+    "phonetic": "/wɜː(ɹ)θˈwaɪl/",
+    "phonetics": [
+      {
+        "text": "/wɜː(ɹ)θˈwaɪl/",
+        "audio": ""
+      }
+    ],
+    "meanings": [
+      {
+        "partOfSpeech": "adjective",
+        "definitions": [
+          {
+            "definition": "Good and important enough to spend time, effort, or money on.",
+            "synonyms": [],
+            "antonyms": [],
+            "example": "Doing volunteer work to help others is truly worthwhile."
+          }
+        ],
+        "synonyms": [
+          "worth it"
+        ],
+        "antonyms": []
+      }
+    ],
+    "license": {
+      "name": "CC BY-SA 3.0",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    "sourceUrls": [
+      "https://en.wiktionary.org/wiki/worthwhile"
+    ]
+  }
+]
