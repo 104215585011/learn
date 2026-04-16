@@ -599,6 +599,10 @@ class FloatVocabApp:
         self.news_service = news_service or NewsService(service_db_path)
         self.enrichment_service = enrichment_service or EnrichmentService(service_db_path)
         self.root = tk.Tk()
+        self._root_destroy = self.root.destroy
+        self.root.destroy = self.close
+        self.poll_after_id = None
+        self.closed = False
         self.configure_root()
         self.hotkey_events = queue.Queue()
         self.hotkeys = GlobalHotkeys(self.hotkey_events)
@@ -610,7 +614,7 @@ class FloatVocabApp:
         self.build_ui()
         self.refresh_all()
         self.hotkeys.start()
-        self.root.after(120, self.poll_hotkeys)
+        self.poll_after_id = self.root.after(120, self.poll_hotkeys)
 
     def configure_root(self):
         self.root.title("FloatVocab 悬浮背词")
@@ -1195,6 +1199,8 @@ class FloatVocabApp:
         widget.configure(state="disabled")
 
     def poll_hotkeys(self):
+        if self.closed or not self.root.winfo_exists():
+            return
         while True:
             try:
                 event_id = self.hotkey_events.get_nowait()
@@ -1206,7 +1212,27 @@ class FloatVocabApp:
                 self.float_window.mark_unknown()
             elif event_id == 3:
                 self.float_window.flip()
-        self.root.after(120, self.poll_hotkeys)
+        self.poll_after_id = self.root.after(120, self.poll_hotkeys)
+
+    def close(self):
+        if self.closed:
+            if self.root.winfo_exists():
+                self._root_destroy()
+            return
+        self.closed = True
+        if self.poll_after_id:
+            try:
+                self.root.after_cancel(self.poll_after_id)
+            except tk.TclError:
+                pass
+            self.poll_after_id = None
+        if hasattr(self, "db") and getattr(self.db, "conn", None) is not None:
+            try:
+                self.db.conn.close()
+            except sqlite3.Error:
+                pass
+        if self.root.winfo_exists():
+            self._root_destroy()
 
     def run(self):
         self.root.mainloop()

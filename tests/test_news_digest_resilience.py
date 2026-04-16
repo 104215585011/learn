@@ -42,6 +42,23 @@ class NewsDigestResilienceTests(unittest.TestCase):
         self.assertEqual(row["bilingual_text"], row["content_text"])
         self.assertIn("content_error", row["metadata_json"])
 
+    def test_save_brief_to_favorites_returns_existing_article_for_duplicate_url(self):
+        self.conn.execute(
+            """
+            INSERT INTO favorite_articles
+            (brief_id, source_key, source_name, title, summary, url, published_at, content_text, bilingual_text)
+            VALUES (99, 'bbc_world', 'BBC World', 'Old title', 'Old summary', 'https://example.com/story', '2026-04-14T11:00:00', 'Old article.', 'Old article.')
+            """,
+        )
+        self.conn.commit()
+
+        with mock.patch.object(news_digest, "fetch_article_content", side_effect=AssertionError("should not refetch duplicate URL")):
+            row = news_digest.save_brief_to_favorites(self.conn, 1)
+
+        self.assertEqual(row["brief_id"], 99)
+        self.assertEqual(row["url"], "https://example.com/story")
+        self.assertEqual(self.conn.execute("SELECT saved FROM daily_briefs WHERE id = 1").fetchone()["saved"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 
 import app
 
@@ -18,6 +19,14 @@ class AppLayoutTests(unittest.TestCase):
             self.assertIn("英语日报", tab_labels)
         finally:
             ui.root.destroy()
+
+    def test_destroying_main_window_closes_database_connection(self):
+        ui = app.FloatVocabApp()
+        ui.root.update_idletasks()
+        ui.root.destroy()
+
+        with self.assertRaises(sqlite3.ProgrammingError):
+            ui.db.conn.execute("SELECT 1")
 
 
 if __name__ == "__main__":

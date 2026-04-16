@@ -138,12 +138,23 @@ def favorite_article_by_id(conn: sqlite3.Connection, article_id: int) -> sqlite3
 
 def save_brief_to_favorites(conn: sqlite3.Connection, brief_id: int) -> sqlite3.Row:
     ensure_schema(conn)
-    existing = conn.execute("SELECT * FROM favorite_articles WHERE brief_id = ?", (brief_id,)).fetchone()
-    if existing:
-        return existing
     brief = conn.execute("SELECT * FROM daily_briefs WHERE id = ?", (brief_id,)).fetchone()
     if not brief:
         raise ValueError("日报不存在")
+    existing = conn.execute(
+        """
+        SELECT *
+        FROM favorite_articles
+        WHERE brief_id = ? OR url = ?
+        ORDER BY CASE WHEN brief_id = ? THEN 0 ELSE 1 END, id
+        LIMIT 1
+        """,
+        (brief_id, brief["url"], brief_id),
+    ).fetchone()
+    if existing:
+        conn.execute("UPDATE daily_briefs SET saved = 1 WHERE id = ?", (brief_id,))
+        conn.commit()
+        return existing
     metadata = {
         "saved_from_brief_id": brief_id,
         "saved_at": datetime.now().isoformat(timespec="seconds"),
