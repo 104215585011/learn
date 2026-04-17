@@ -162,6 +162,26 @@ class ServiceBoundaryTests(unittest.TestCase):
         self.assertEqual(brief_id_arg, 1)
         self.assertEqual(save_mock.call_args.kwargs["language_code"], "es")
 
+    def test_news_service_delete_favorite_article_delegates_with_sqlite_connection(self):
+        sentinel_conn = mock.Mock(spec=sqlite3.Connection)
+        connection_context = mock.MagicMock()
+        connection_context.__enter__.return_value = sentinel_conn
+        connection_factory = mock.Mock(return_value=connection_context)
+
+        with mock.patch.object(app.news_digest, "delete_favorite_article", return_value=True) as delete_mock:
+            service = app.NewsService(self.db_path, connection_factory=connection_factory)
+            result = service.delete_favorite_article(article_id=9, language_code="ja")
+
+        self.assertTrue(result)
+        connection_factory.assert_called_once_with(self.db_path)
+        connection_context.__enter__.assert_called_once_with()
+        connection_context.__exit__.assert_called_once()
+        delete_mock.assert_called_once()
+        conn_arg, article_id_arg = delete_mock.call_args.args
+        self.assertIs(conn_arg, sentinel_conn)
+        self.assertEqual(article_id_arg, 9)
+        self.assertEqual(delete_mock.call_args.kwargs["language_code"], "ja")
+
     def test_enrichment_service_enrich_examples_forwards_result_shape(self):
         service = app.EnrichmentService(self.db_path)
         payload = {"processed": 2, "updated": 1, "skipped": 1, "failures": []}

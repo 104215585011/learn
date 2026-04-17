@@ -42,6 +42,12 @@ class NewsService:
                 conn.row_factory = sqlite3.Row
             return self.news_digest.favorite_article_by_id(conn, article_id, language_code=language_code)
 
+    def delete_favorite_article(self, article_id: int, language_code: str = DEFAULT_LANGUAGE_CODE):
+        with self.connection_factory(self.db_path) as conn:
+            if hasattr(conn, "row_factory"):
+                conn.row_factory = sqlite3.Row
+            return self.news_digest.delete_favorite_article(conn, article_id, language_code=language_code)
+
     def get_brief(self, brief_id: int, language_code: str = DEFAULT_LANGUAGE_CODE):
         with self.connection_factory(self.db_path) as conn:
             if hasattr(conn, "row_factory"):

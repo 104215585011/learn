@@ -1102,7 +1102,7 @@ class FloatVocabApp:
         plan_actions.pack(fill="x", pady=(16, 0))
         ttk.Button(plan_actions, text="保存计划", style="Secondary.TButton", command=self.save_plan).pack(side="left")
         ttk.Button(plan_actions, text="导入 TXT / CSV 词库", style="Quiet.TButton", command=self.import_words).pack(side="left", padx=(10, 0))
-        ttk.Button(plan_actions, text="编辑当前词库", style="Quiet.TButton", command=self.edit_selected_lexicon).pack(side="left", padx=(10, 0))
+        ttk.Button(plan_actions, text="重命名当前词库", style="Quiet.TButton", command=self.edit_selected_lexicon).pack(side="left", padx=(10, 0))
         ttk.Button(plan_actions, text="删除当前词库", style="Quiet.TButton", command=self.delete_selected_lexicon).pack(side="left", padx=(10, 0))
         ttk.Button(plan_actions, text="补全缺失例句", style="Quiet.TButton", command=self.enrich_examples).pack(side="left", padx=(10, 0))
 
@@ -1229,8 +1229,12 @@ class FloatVocabApp:
         favorite_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         favorite_frame.columnconfigure(0, weight=1)
         favorite_frame.rowconfigure(1, weight=1)
-        self.favorite_articles_label = ttk.Label(favorite_frame, text="个人收藏", style="PanelTitle.TLabel")
-        self.favorite_articles_label.grid(row=0, column=0, sticky="w", pady=(0, 8))
+        favorite_header = ttk.Frame(favorite_frame, style="Panel.TFrame")
+        favorite_header.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        favorite_header.columnconfigure(0, weight=1)
+        self.favorite_articles_label = ttk.Label(favorite_header, text="个人收藏", style="PanelTitle.TLabel")
+        self.favorite_articles_label.grid(row=0, column=0, sticky="w")
+        ttk.Button(favorite_header, text="删除收藏", style="Quiet.TButton", command=self.delete_selected_favorite).grid(row=0, column=1, sticky="e")
         self.favorite_tree = ttk.Treeview(favorite_frame, columns=("source", "saved", "title"), show="headings", height=10)
         self.favorite_tree.heading("source", text="来源")
         self.favorite_tree.heading("saved", text="收藏时间")
@@ -1621,13 +1625,35 @@ class FloatVocabApp:
             saved = (row["saved_at"] or "")[:16].replace("T", " ")
             self.favorite_tree.insert("", "end", iid=str(row["id"]), values=(row["source_name"], saved, row["title"]))
 
-    def show_selected_favorite(self):
+    def selected_favorite_id(self) -> int | None:
         selection = self.favorite_tree.selection()
-        if not selection:
+        return int(selection[0]) if selection else None
+
+    def show_selected_favorite(self):
+        article_id = self.selected_favorite_id()
+        if not article_id:
             return
-        article = self.news_service.get_favorite_article(int(selection[0]), language_code=self.active_language_code())
+        article = self.news_service.get_favorite_article(article_id, language_code=self.active_language_code())
         if article:
             self.article_window.show_article(article)
+
+    def delete_selected_favorite(self):
+        article_id = self.selected_favorite_id()
+        if not article_id:
+            messagebox.showinfo(APP_NAME, "请先选择一篇收藏日报。")
+            return
+        article = self.news_service.get_favorite_article(article_id, language_code=self.active_language_code())
+        if not article:
+            self.refresh_favorite_list()
+            self.refresh_brief_list()
+            return
+        if not messagebox.askyesno(APP_NAME, f"确定删除收藏《{article['title']}》吗？"):
+            return
+        deleted = self.news_service.delete_favorite_article(article_id, language_code=self.active_language_code())
+        if not deleted:
+            messagebox.showwarning(APP_NAME, "这篇收藏已经不存在了。")
+        self.refresh_favorite_list()
+        self.refresh_brief_list()
 
     def update_text_widget(self, widget: tk.Text, content: str):
         widget.configure(state="normal")

@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover - runtime dependency guard
 
 DEFAULT_LANGUAGE_CODE = "en"
 USER_AGENT = "FloatVocabNews/1.0"
-GOOGLE_TRANSLATE_ENDPOINT = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q={query}"
+GOOGLE_TRANSLATE_ENDPOINT = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q={query}"
 ECONOMIST_AUTH_URL = "https://api.economist.com/eco/content/all/b2b-content-api/v1/auth/login"
 ECONOMIST_BRIEF_URL = "https://api.economist.com/eco/content/all/b2b-content-api/v1/the-world-in-brief"
 
@@ -45,6 +45,114 @@ RSS_SOURCES_BY_LANGUAGE = {
             "key": "reuters_world",
             "name": "Reuters World",
             "feed": "https://feeds.reuters.com/Reuters/worldNews",
+        },
+    ],
+    "es": [
+        {
+            "key": "bbc_mundo",
+            "name": "BBC Mundo",
+            "feed": "https://feeds.bbci.co.uk/mundo/rss.xml",
+        },
+        {
+            "key": "el_pais_internacional",
+            "name": "El Pais Internacional",
+            "feed": "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/internacional/portada",
+        },
+    ],
+    "fr": [
+        {
+            "key": "france24_fr",
+            "name": "France 24 FR",
+            "feed": "https://www.france24.com/fr/rss",
+        },
+        {
+            "key": "le_monde_international",
+            "name": "Le Monde International",
+            "feed": "https://www.lemonde.fr/international/rss_full.xml",
+        },
+    ],
+    "ko": [
+        {
+            "key": "yonhap_kr",
+            "name": "Yonhap",
+            "feed": "https://www.yna.co.kr/rss/news.xml",
+        },
+        {
+            "key": "kbs_world_kr",
+            "name": "KBS News",
+            "feed": "https://world.kbs.co.kr/rss/rss_news.htm?lang=k",
+        },
+    ],
+    "ja": [
+        {
+            "key": "livedoor_top_ja",
+            "name": "livedoor News",
+            "feed": "https://news.livedoor.com/topics/rss/top.xml",
+        },
+        {
+            "key": "livedoor_int_ja",
+            "name": "livedoor International",
+            "feed": "https://news.livedoor.com/topics/rss/int.xml",
+        },
+    ],
+    "it": [
+        {
+            "key": "ansa_it",
+            "name": "ANSA",
+            "feed": "https://www.ansa.it/sito/ansait_rss.xml",
+        },
+        {
+            "key": "il_post_mondo",
+            "name": "Il Post Mondo",
+            "feed": "https://www.ilpost.it/mondo/feed/",
+        },
+    ],
+    "id": [
+        {
+            "key": "antara_id",
+            "name": "Antara News",
+            "feed": "https://www.antaranews.com/rss/terkini.xml",
+        },
+        {
+            "key": "cnn_indonesia_internasional",
+            "name": "CNN Indonesia Internasional",
+            "feed": "https://www.cnnindonesia.com/internasional/rss",
+        },
+    ],
+    "ru": [
+        {
+            "key": "meduza_ru",
+            "name": "Meduza",
+            "feed": "https://meduza.io/rss2/all",
+        },
+        {
+            "key": "dw_ru",
+            "name": "DW Russian",
+            "feed": "https://rss.dw.com/rdf/rss-ru-all",
+        },
+    ],
+    "ar": [
+        {
+            "key": "bbc_arabic",
+            "name": "BBC Arabic",
+            "feed": "https://feeds.bbci.co.uk/arabic/rss.xml",
+        },
+        {
+            "key": "skynews_arabia",
+            "name": "Sky News Arabia",
+            "feed": "https://www.skynewsarabia.com/web/rss",
+        },
+    ],
+    "pt": [
+        {
+            "key": "publico_pt",
+            "name": "Publico",
+            "feed": "https://www.publico.pt/rss",
+        },
+        {
+            "key": "folha_br",
+            "name": "Folha",
+            "feed": "https://feeds.folha.uol.com.br/emcimadahora/rss091.xml",
         },
     ],
 }
@@ -235,6 +343,32 @@ def favorite_article_by_id(
     ).fetchone()
 
 
+def delete_favorite_article(
+    conn: sqlite3.Connection,
+    article_id: int,
+    *,
+    language_code: str = DEFAULT_LANGUAGE_CODE,
+) -> bool:
+    ensure_schema(conn)
+    article = conn.execute(
+        "SELECT * FROM favorite_articles WHERE id = ? AND language_code = ?",
+        (article_id, language_code),
+    ).fetchone()
+    if not article:
+        return False
+    brief_id = article["brief_id"]
+    conn.execute(
+        "DELETE FROM favorite_articles WHERE id = ? AND language_code = ?",
+        (article_id, language_code),
+    )
+    conn.execute(
+        "UPDATE daily_briefs SET saved = 0 WHERE id = ? AND language_code = ?",
+        (brief_id, language_code),
+    )
+    conn.commit()
+    return True
+
+
 def save_brief_to_favorites(
     conn: sqlite3.Connection,
     brief_id: int,
@@ -423,9 +557,99 @@ def fetch_article_content(source_key: str, url: str) -> str:
             "article [data-component='text-block'] p",
             "main [data-component='text-block'] p",
         ],
+        "bbc_mundo": [
+            "main article p",
+            "article [data-component='text-block'] p",
+            "main [data-component='text-block'] p",
+        ],
+        "bbc_arabic": [
+            "main article p",
+            "article [data-component='text-block'] p",
+            "main [data-component='text-block'] p",
+        ],
         "reuters_world": [
             "article p",
             "[data-testid='paragraph']",
+            "main p",
+        ],
+        "el_pais_internacional": [
+            "article p",
+            "[data-dtm-region='articulo_cuerpo'] p",
+            ".a_c p",
+        ],
+        "france24_fr": [
+            "article p",
+            ".t-content__body p",
+            "main p",
+        ],
+        "le_monde_international": [
+            "article p",
+            ".article__content p",
+            "main p",
+        ],
+        "yonhap_kr": [
+            "#articleWrap p",
+            ".story-news p",
+            "article p",
+        ],
+        "kbs_world_kr": [
+            ".detail_cont p",
+            ".news_contents p",
+            "article p",
+        ],
+        "livedoor_top_ja": [
+            ".content--detail-body p",
+            ".module--content p",
+            "article p",
+        ],
+        "livedoor_int_ja": [
+            "article p",
+            ".articleBody p",
+            "main p",
+        ],
+        "ansa_it": [
+            "article p",
+            ".news-txt p",
+            "main p",
+        ],
+        "il_post_mondo": [
+            "article p",
+            ".entry-content p",
+            "main p",
+        ],
+        "antara_id": [
+            "article p",
+            ".post-content p",
+            "main p",
+        ],
+        "cnn_indonesia_internasional": [
+            "article p",
+            ".detail-text p",
+            "main p",
+        ],
+        "meduza_ru": [
+            "article p",
+            ".GeneralMaterial-body p",
+            "main p",
+        ],
+        "dw_ru": [
+            "article p",
+            ".longText p",
+            "main p",
+        ],
+        "publico_pt": [
+            "article p",
+            ".article-body p",
+            "main p",
+        ],
+        "folha_br": [
+            "article p",
+            ".c-news__body p",
+            "main p",
+        ],
+        "skynews_arabia": [
+            "article p",
+            ".article-body p",
             "main p",
         ],
     }

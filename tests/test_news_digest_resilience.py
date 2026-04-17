@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 
 import news_digest
+from floatvocab.repositories.lexicon_repository import SUPPORTED_LANGUAGES
 
 
 class NewsDigestResilienceTests(unittest.TestCase):
@@ -83,6 +84,32 @@ class NewsDigestResilienceTests(unittest.TestCase):
         self.assertEqual([row["language_code"] for row in english], ["en"])
         self.assertEqual([row["language_code"] for row in spanish], ["es"])
 
+    def test_delete_favorite_article_removes_row_and_resets_saved_flag(self):
+        with mock.patch.object(news_digest, "fetch_article_content", return_value="Paragraph one."):
+            with mock.patch.object(news_digest, "to_bilingual_text", return_value="Paragraph one.\n段落一。"):
+                saved = news_digest.save_brief_to_favorites(self.conn, 1, language_code="en")
+
+        deleted = news_digest.delete_favorite_article(self.conn, saved["id"], language_code="en")
+
+        self.assertTrue(deleted)
+        self.assertIsNone(news_digest.favorite_article_by_id(self.conn, saved["id"], language_code="en"))
+        self.assertEqual(self.conn.execute("SELECT saved FROM daily_briefs WHERE id = 1").fetchone()["saved"], 0)
+
+    def test_delete_favorite_article_respects_language_scope(self):
+        self.conn.execute(
+            """
+            INSERT INTO favorite_articles
+            (id, brief_id, language_code, source_key, source_name, title, summary, url, published_at, content_text, bilingual_text)
+            VALUES (7, 2, 'es', 'bbc_world_es', 'BBC Mundo', 'Titulo', 'Resumen', 'https://example.com/story', '2026-04-15T11:00:00', 'Hola', 'Hola')
+            """
+        )
+        self.conn.commit()
+
+        deleted = news_digest.delete_favorite_article(self.conn, 7, language_code="en")
+
+        self.assertFalse(deleted)
+        self.assertIsNotNone(news_digest.favorite_article_by_id(self.conn, 7, language_code="es"))
+
     def test_ensure_schema_migrates_legacy_news_tables_to_language_aware_shape(self):
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
@@ -133,6 +160,24 @@ class NewsDigestResilienceTests(unittest.TestCase):
 
         self.assertEqual(brief["language_code"], "en")
         self.assertEqual(favorite["language_code"], "en")
+
+    def test_rss_sources_are_configured_for_every_supported_language(self):
+        configured = set(news_digest.RSS_SOURCES_BY_LANGUAGE)
+        expected = {code for code, _label in SUPPORTED_LANGUAGES}
+
+        self.assertTrue(expected.issubset(configured))
+        for code in expected:
+            self.assertGreaterEqual(len(news_digest.RSS_SOURCES_BY_LANGUAGE[code]), 1)
+
+    def test_translate_text_uses_auto_source_language_detection(self):
+        payload = '[[["你好","",""]]]'
+
+        with mock.patch.object(news_digest, "fetch_text", return_value=payload) as fetch_mock:
+            translated = news_digest.translate_text("Hola")
+
+        self.assertEqual(translated, "你好")
+        requested_url = fetch_mock.call_args.args[0]
+        self.assertIn("sl=auto", requested_url)
 
 if __name__ == "__main__":
     unittest.main()
