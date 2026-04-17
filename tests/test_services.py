@@ -97,6 +97,51 @@ class ServiceBoundaryTests(unittest.TestCase):
             expected["widget_size"],
         )
 
+    def test_settings_service_switch_language_keeps_matching_lexicon_or_falls_back(self):
+        english_id = self.db.create_lexicon("English Pack", "test", "en")
+        spanish_id = self.db.create_lexicon("Spanish Pack", "test", "es")
+        plan = self.db.plan()
+        self.db.save_plan(
+            english_id,
+            plan["daily_new"],
+            plan["target_date"] or (date.today() + timedelta(days=30)).isoformat(),
+            plan["float_alpha"],
+            plan["font_size"],
+            plan["bg_color"],
+            plan["widget_size"],
+            current_language_code="en",
+        )
+
+        service = app.SettingsService(self.db)
+        updated = service.switch_language("es")
+        self.assertEqual(updated["current_language_code"], "es")
+        self.assertEqual(updated["lexicon_id"], spanish_id)
+
+        updated_again = service.switch_language("en")
+        self.assertEqual(updated_again["current_language_code"], "en")
+        chosen_lexicon = self.db.lexicon_repository.get_lexicon(updated_again["lexicon_id"])
+        self.assertIsNotNone(chosen_lexicon)
+        self.assertEqual(chosen_lexicon["language_code"], "en")
+
+    def test_settings_service_switch_language_clears_lexicon_when_language_has_no_lexicons(self):
+        english_id = self.db.create_lexicon("English Pack", "test", "en")
+        plan = self.db.plan()
+        self.db.save_plan(
+            english_id,
+            plan["daily_new"],
+            plan["target_date"] or (date.today() + timedelta(days=30)).isoformat(),
+            plan["float_alpha"],
+            plan["font_size"],
+            plan["bg_color"],
+            plan["widget_size"],
+            current_language_code="en",
+        )
+
+        service = app.SettingsService(self.db)
+        updated = service.switch_language("ja")
+        self.assertEqual(updated["current_language_code"], "ja")
+        self.assertIsNone(updated["lexicon_id"])
+
     def test_news_service_save_brief_to_favorites_delegates_with_sqlite_connection(self):
         sentinel_conn = mock.Mock(spec=sqlite3.Connection)
         connection_context = mock.MagicMock()
@@ -105,7 +150,7 @@ class ServiceBoundaryTests(unittest.TestCase):
 
         with mock.patch.object(app.news_digest, "save_brief_to_favorites", return_value={"saved": True}) as save_mock:
             service = app.NewsService(self.db_path, connection_factory=connection_factory)
-            result = service.save_brief_to_favorites(brief_id=1)
+            result = service.save_brief_to_favorites(brief_id=1, language_code="es")
 
         self.assertEqual(result, {"saved": True})
         connection_factory.assert_called_once_with(self.db_path)
@@ -115,6 +160,7 @@ class ServiceBoundaryTests(unittest.TestCase):
         conn_arg, brief_id_arg = save_mock.call_args.args
         self.assertIs(conn_arg, sentinel_conn)
         self.assertEqual(brief_id_arg, 1)
+        self.assertEqual(save_mock.call_args.kwargs["language_code"], "es")
 
     def test_enrichment_service_enrich_examples_forwards_result_shape(self):
         service = app.EnrichmentService(self.db_path)

@@ -6,6 +6,8 @@ from typing import Callable
 
 import news_digest
 
+DEFAULT_LANGUAGE_CODE = "en"
+
 
 def open_connection(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
@@ -95,13 +97,44 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    _ensure_lexicon_schema(conn)
     _ensure_plan_columns(conn)
     _ensure_word_columns(conn)
     conn.execute(
-        "INSERT OR IGNORE INTO plans (id, lexicon_id, daily_new, target_date) VALUES (1, NULL, 20, ?)",
-        [(date.today() + timedelta(days=90)).isoformat()],
+        """
+        INSERT OR IGNORE INTO plans (id, lexicon_id, daily_new, target_date, current_language_code)
+        VALUES (1, NULL, 20, ?, ?)
+        """,
+        [(date.today() + timedelta(days=90)).isoformat(), DEFAULT_LANGUAGE_CODE],
     )
     conn.commit()
+
+
+def _ensure_lexicon_schema(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(lexicons)").fetchall()}
+    if "language_code" in columns:
+        return
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.executescript(
+        f"""
+        CREATE TABLE lexicons_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          language_code TEXT NOT NULL DEFAULT '{DEFAULT_LANGUAGE_CODE}',
+          source TEXT NOT NULL DEFAULT 'built-in',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(language_code, name)
+        );
+
+        INSERT INTO lexicons_new (id, name, language_code, source, created_at)
+        SELECT id, name, '{DEFAULT_LANGUAGE_CODE}', source, created_at
+        FROM lexicons;
+
+        DROP TABLE lexicons;
+        ALTER TABLE lexicons_new RENAME TO lexicons;
+        """
+    )
+    conn.execute("PRAGMA foreign_keys = ON")
 
 
 def _ensure_plan_columns(conn: sqlite3.Connection) -> None:
@@ -110,6 +143,8 @@ def _ensure_plan_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE plans ADD COLUMN widget_size TEXT NOT NULL DEFAULT 'medium'")
     if "current_word_id" not in columns:
         conn.execute("ALTER TABLE plans ADD COLUMN current_word_id INTEGER")
+    if "current_language_code" not in columns:
+        conn.execute(f"ALTER TABLE plans ADD COLUMN current_language_code TEXT NOT NULL DEFAULT '{DEFAULT_LANGUAGE_CODE}'")
 
 
 def _ensure_word_columns(conn: sqlite3.Connection) -> None:
@@ -125,11 +160,14 @@ def _ensure_word_columns(conn: sqlite3.Connection) -> None:
 
 
 def _seed_builtin_lexicon(conn: sqlite3.Connection, builtin_lexicon: Path) -> None:
-    if conn.execute("SELECT 1 FROM lexicons WHERE name = ?", ("考研核心 50",)).fetchone():
+    if conn.execute(
+        "SELECT 1 FROM lexicons WHERE name = ? AND language_code = ?",
+        ("鑰冪爺鏍稿績 50", DEFAULT_LANGUAGE_CODE),
+    ).fetchone():
         return
     with builtin_lexicon.open("r", encoding="utf-8") as file:
         words = json.load(file)
-    lexicon_id = _create_lexicon(conn, "考研核心 50", "built-in")
+    lexicon_id = _create_lexicon(conn, "鑰冪爺鏍稿績 50", "built-in", DEFAULT_LANGUAGE_CODE)
     today = date.today().isoformat()
     for item in words:
         conn.execute(
@@ -140,7 +178,10 @@ def _seed_builtin_lexicon(conn: sqlite3.Connection, builtin_lexicon: Path) -> No
             """,
             (lexicon_id, item["word"], item.get("phonetic", ""), item["meaning"], item.get("example", ""), today),
         )
-    conn.execute("UPDATE plans SET lexicon_id = ? WHERE id = 1 AND lexicon_id IS NULL", (lexicon_id,))
+    conn.execute(
+        "UPDATE plans SET lexicon_id = ?, current_language_code = ? WHERE id = 1 AND lexicon_id IS NULL",
+        (lexicon_id, DEFAULT_LANGUAGE_CODE),
+    )
     conn.commit()
 
 
@@ -154,14 +195,17 @@ def _seed_exam_lexicons(
         return
     today = date.today().isoformat()
     for lexicon_name, file_name in exam_lexicons:
-        if conn.execute("SELECT 1 FROM lexicons WHERE name = ?", (lexicon_name,)).fetchone():
+        if conn.execute(
+            "SELECT 1 FROM lexicons WHERE name = ? AND language_code = ?",
+            (lexicon_name, DEFAULT_LANGUAGE_CODE),
+        ).fetchone():
             continue
         source_path = vocab_source_dir / file_name
         if not source_path.exists():
             continue
         with source_path.open("r", encoding="utf-8") as file:
             rows = json.load(file)
-        lexicon_id = _create_lexicon(conn, lexicon_name, "built-in")
+        lexicon_id = _create_lexicon(conn, lexicon_name, "built-in", DEFAULT_LANGUAGE_CODE)
         for item in rows:
             row = qwerty_item_to_word(item, lexicon_name)
             if not row:
@@ -177,10 +221,20 @@ def _seed_exam_lexicons(
     conn.commit()
 
 
-def _create_lexicon(conn: sqlite3.Connection, name: str, source: str = "custom") -> int:
-    cursor = conn.execute("INSERT OR IGNORE INTO lexicons (name, source) VALUES (?, ?)", (name, source))
+def _create_lexicon(
+    conn: sqlite3.Connection,
+    name: str,
+    source: str = "custom",
+    language_code: str = DEFAULT_LANGUAGE_CODE,
+) -> int:
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO lexicons (name, language_code, source) VALUES (?, ?, ?)",
+        (name, language_code, source),
+    )
     conn.commit()
     if cursor.lastrowid:
         return cursor.lastrowid
-    return conn.execute("SELECT id FROM lexicons WHERE name = ?", (name,)).fetchone()["id"]
-
+    return conn.execute(
+        "SELECT id FROM lexicons WHERE name = ? AND language_code = ?",
+        (name, language_code),
+    ).fetchone()["id"]

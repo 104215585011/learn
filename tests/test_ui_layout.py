@@ -1,7 +1,7 @@
 import shutil
 import sqlite3
-import tkinter.font as tkfont
 import time
+import tkinter.font as tkfont
 import unittest
 import uuid
 from datetime import date, timedelta
@@ -19,11 +19,28 @@ class AppLayoutTests(unittest.TestCase):
             ui.root.update()
 
             self.assertTrue(hasattr(ui, "content_notebook"))
+            self.assertTrue(hasattr(ui, "language_combo"))
             self.assertGreater(ui.content_notebook.winfo_height(), 240)
 
             tab_labels = [ui.content_notebook.tab(tab_id, "text") for tab_id in ui.content_notebook.tabs()]
             self.assertIn("词库概览", tab_labels)
-            self.assertIn("英语日报", tab_labels)
+            expected_news_tab = f"{dict(ui.settings_service.list_supported_languages())[ui.active_language_code()]} 日报"
+            self.assertIn(expected_news_tab, tab_labels)
+        finally:
+            ui.root.destroy()
+
+    def test_switching_to_language_without_lexicons_disables_lexicon_selector(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.language_var.set("Japanese · ja")
+            ui.on_language_selected()
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            self.assertEqual(ui.active_language_code(), "ja")
+            self.assertEqual(str(ui.lexicon_combo.cget("state")), "disabled")
+            self.assertIn("还没有词库", ui.lexicon_state_label.cget("text"))
+            self.assertIn("没有配置日报源", ui.brief_summary.get("1.0", "end").strip())
         finally:
             ui.root.destroy()
 
@@ -90,7 +107,7 @@ class AppLayoutTests(unittest.TestCase):
                 id=1,
                 word="abandon",
                 phonetic="/əˈbændən/",
-                meaning="；".join(["这是一个非常长的中文释义，用来验证悬浮窗在内容很多的时候也不会把按钮挤出界面"] * 12),
+                meaning="；".join(["这是一个很长的中文释义，用来验证悬浮窗在内容很多的时候也不会把按钮挤出界面"] * 12),
                 example="A long example sentence.",
                 status="new",
                 lexicon_name="test",
@@ -117,7 +134,7 @@ class AppLayoutTests(unittest.TestCase):
                 id=1,
                 word="aggressive",
                 phonetic="/əˈɡresɪv/",
-                meaning="故作敢为的；有进取心的；积极的；咄咄逼人的；主动出击的；强势的；好斗的",
+                meaning="故作勇为的；有进取心的；积极的；咄咄逼人的；主动出击的；强势的；好斗的",
                 example="Aggressive sales tactics can backfire.",
                 status="new",
                 lexicon_name="test",
@@ -133,7 +150,7 @@ class AppLayoutTests(unittest.TestCase):
             detail_font_size = abs(int(tkfont.Font(font=ui.float_window.detail_label.cget("font")).actual("size")))
 
             self.assertEqual(ui.float_window.word_label.cget("text"), "aggressive")
-            self.assertIn("故作敢为的", ui.float_window.detail_label.cget("text"))
+            self.assertIn("故作勇为的", ui.float_window.detail_label.cget("text"))
             self.assertLessEqual(word_font_size, 22)
             self.assertGreater(word_font_size, detail_font_size)
         finally:
@@ -147,7 +164,7 @@ class AppLayoutTests(unittest.TestCase):
                 id=1,
                 word="accommodate",
                 phonetic="/əˈkɒmədeɪt/",
-                meaning="容纳；给……提供住宿；顺应；帮忙；调节；适应；和解；照顾",
+                meaning="容纳；给……提供住处；顺应；帮忙；调节；适应；和解；照顾",
                 example="The hotel can accommodate up to 300 guests.",
                 status="new",
                 lexicon_name="test",

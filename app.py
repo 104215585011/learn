@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from floatvocab.db import initialize_database, open_connection
+from floatvocab.db import DEFAULT_LANGUAGE_CODE, initialize_database, open_connection
 from floatvocab.models import WordCard
 from floatvocab.repositories import LexiconRepository, NewsRepository, PlanRepository, StudyRepository
 from floatvocab.services import EnrichmentService as _BaseEnrichmentService
@@ -132,14 +132,26 @@ class FloatVocabDB:
             row_to_card=row_to_card,
         )
         self.news_repository = NewsRepository(self.conn)
-    def create_lexicon(self, name: str, source: str = 'custom') -> int:
-        return self.lexicon_repository.create_lexicon(name, source)
+    def create_lexicon(self, name: str, source: str = 'custom', language_code: str = DEFAULT_LANGUAGE_CODE) -> int:
+        return self.lexicon_repository.create_lexicon(name, source, language_code)
 
-    def import_words(self, file_path: str) -> tuple[int, str]:
+    def supported_languages(self):
+        return self.lexicon_repository.list_supported_languages()
+
+    def import_words(
+        self,
+        file_path: str,
+        current_language_code: str = DEFAULT_LANGUAGE_CODE,
+    ) -> tuple[int, str, str]:
         path = Path(file_path)
         rows = self.parse_word_file(path)
-        imported = self.lexicon_repository.import_word_rows(path.stem, rows, "import")
-        return imported, path.stem
+        supported_codes = {code for code, _label in self.supported_languages()}
+        explicit_language_code = next((str(row.get("language_code", "")).strip() for row in rows if str(row.get("language_code", "")).strip()), "")
+        language_code = explicit_language_code or current_language_code
+        if language_code not in supported_codes:
+            raise ValueError(f"Unsupported language_code: {language_code}")
+        imported = self.lexicon_repository.import_word_rows(path.stem, rows, "import", language_code)
+        return imported, path.stem, language_code
 
     @staticmethod
     def parse_word_file(path: Path) -> list[dict]:
@@ -162,17 +174,49 @@ class FloatVocabDB:
                 rows.append(row_to_word_dict([part.strip() for part in line.split(delimiter)]))
         return rows
 
-    def lexicons(self):
-        return self.lexicon_repository.list_lexicons()
+    def lexicons(self, language_code: str | None = None):
+        return self.lexicon_repository.list_lexicons(language_code)
 
     def plan(self):
         return self.plan_repository.fetch_plan()
 
-    def save_plan(self, lexicon_id: int, daily_new: int, target_date: str, alpha: float, font_size: int, bg_color: str, widget_size: str):
-        self.plan_repository.save_plan(lexicon_id, daily_new, target_date, alpha, font_size, bg_color, widget_size)
+    def save_plan(
+        self,
+        lexicon_id: int,
+        daily_new: int,
+        target_date: str,
+        alpha: float,
+        font_size: int,
+        bg_color: str,
+        widget_size: str,
+        current_language_code: str | None = None,
+    ):
+        self.plan_repository.save_plan(
+            lexicon_id,
+            daily_new,
+            target_date,
+            alpha,
+            font_size,
+            bg_color,
+            widget_size,
+            current_language_code=current_language_code,
+        )
 
     def save_float_style(self, alpha: float, font_size: int, bg_color: str, widget_size: str):
         self.plan_repository.save_float_style(alpha, font_size, bg_color, widget_size)
+
+    def set_current_language(self, language_code: str):
+        plan = self.plan()
+        current_lexicon = None
+        if plan["lexicon_id"]:
+            current_lexicon = self.lexicon_repository.get_lexicon(plan["lexicon_id"])
+        if current_lexicon and current_lexicon["language_code"] == language_code:
+            next_lexicon_id = current_lexicon["id"]
+        else:
+            first_lexicon = self.lexicon_repository.first_lexicon_for_language(language_code)
+            next_lexicon_id = first_lexicon["id"] if first_lexicon else None
+        self.plan_repository.set_current_language(language_code, next_lexicon_id)
+        return self.plan()
 
     def next_card(self) -> WordCard | None:
         return self.study_repository.next_card()
@@ -1009,23 +1053,34 @@ class FloatVocabApp:
 
         plan_box = self.create_panel(dashboard_tab, "学习计划", "先确定词库和每日目标，再进入今天的背词节奏。")
         plan_box.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        self.language_var = tk.StringVar()
         self.lexicon_var = tk.StringVar()
         plan_form = ttk.Frame(plan_box, style="Panel.TFrame")
         plan_form.pack(fill="x")
         plan_form.columnconfigure(0, weight=1)
         plan_form.columnconfigure(1, weight=1)
-        ttk.Label(plan_form, text="当前词库", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
-        ttk.Label(plan_form, text="目标日期", style="SectionLabel.TLabel").grid(row=0, column=1, sticky="w", padx=(12, 0), pady=(0, 6))
+        ttk.Label(plan_form, text="学习语言", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(plan_form, text="当前词库", style="SectionLabel.TLabel").grid(row=0, column=1, sticky="w", padx=(12, 0), pady=(0, 6))
+        self.language_combo = ttk.Combobox(plan_form, textvariable=self.language_var, state="readonly")
+        self.language_combo.grid(row=1, column=0, sticky="ew", padx=(0, 6))
+        self.language_combo.bind("<<ComboboxSelected>>", self.on_language_selected)
         self.lexicon_combo = ttk.Combobox(plan_form, textvariable=self.lexicon_var, state="readonly")
-        self.lexicon_combo.grid(row=1, column=0, sticky="ew", padx=(0, 6))
+        self.lexicon_combo.bind("<<ComboboxSelected>>", lambda _event: self.refresh_words())
+        self.lexicon_combo.grid(row=1, column=1, sticky="ew", padx=(6, 0))
+        ttk.Label(plan_form, text="目标日期", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 6))
+        ttk.Label(plan_form, text="每日新词", style="SectionLabel.TLabel").grid(row=2, column=1, sticky="w", padx=(12, 0), pady=(14, 6))
         self.target_date_var = tk.StringVar()
-        ttk.Entry(plan_form, textvariable=self.target_date_var).grid(row=1, column=1, sticky="ew", padx=(6, 0))
-        ttk.Label(plan_form, text="每日新词", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 6))
-        ttk.Label(plan_form, text="状态", style="SectionLabel.TLabel").grid(row=2, column=1, sticky="w", padx=(12, 0), pady=(14, 6))
+        ttk.Entry(plan_form, textvariable=self.target_date_var).grid(row=3, column=0, sticky="ew", padx=(0, 6))
         self.daily_new_var = tk.IntVar(value=20)
-        ttk.Spinbox(plan_form, from_=1, to=300, textvariable=self.daily_new_var).grid(row=3, column=0, sticky="ew", padx=(0, 6))
+        ttk.Spinbox(plan_form, from_=1, to=300, textvariable=self.daily_new_var).grid(row=3, column=1, sticky="ew", padx=(6, 0))
+        ttk.Label(plan_form, text="状态", style="SectionLabel.TLabel").grid(row=4, column=0, sticky="w", pady=(14, 6))
+        ttk.Label(plan_form, text="导入提示", style="SectionLabel.TLabel").grid(row=4, column=1, sticky="w", padx=(12, 0), pady=(14, 6))
+        self.lexicon_state_label = ttk.Label(plan_form, text="", style="Muted.TLabel", wraplength=240, justify="left")
+        self.lexicon_state_label.grid(row=5, column=0, sticky="w")
+        self.import_language_label = ttk.Label(plan_form, text="", style="Muted.TLabel", wraplength=240, justify="left")
+        self.import_language_label.grid(row=5, column=1, sticky="w", padx=(12, 0))
         self.example_status_label = ttk.Label(plan_form, text="", style="Muted.TLabel")
-        self.example_status_label.grid(row=3, column=1, sticky="w", padx=(12, 0))
+        self.example_status_label.grid(row=6, column=0, columnspan=2, sticky="w", pady=(12, 0))
         plan_actions = ttk.Frame(plan_box, style="Panel.TFrame")
         plan_actions.pack(fill="x", pady=(16, 0))
         ttk.Button(plan_actions, text="保存计划", style="Secondary.TButton", command=self.save_plan).pack(side="left")
@@ -1099,14 +1154,22 @@ class FloatVocabApp:
         news_tab.rowconfigure(1, weight=1)
         self.content_notebook.add(news_tab, text="英语日报")
 
+        self.news_intro_label = ttk.Label(
+            news_tab,
+            text="英语日报会跟着当前学习语言切换；未配置语言会显示空状态。",
+            style="Muted.TLabel",
+            wraplength=880,
+            justify="left",
+        )
+        self.news_intro_label.grid(row=0, column=0, sticky="w", pady=(0, 12))
         news_actions = ttk.Frame(news_tab, style="Panel.TFrame")
-        news_actions.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        news_actions.grid(row=1, column=0, sticky="ew", pady=(0, 12))
         news_actions.columnconfigure(0, weight=1)
         ttk.Button(news_actions, text="刷新最新 10 篇", style="Quiet.TButton", command=self.refresh_daily_briefs).grid(row=0, column=0, sticky="w")
         ttk.Button(news_actions, text="收藏并翻译", style="Secondary.TButton", command=self.save_selected_brief).grid(row=0, column=1, sticky="e")
 
         news_content = ttk.Frame(news_tab, style="Panel.TFrame")
-        news_content.grid(row=1, column=0, sticky="nsew")
+        news_content.grid(row=2, column=0, sticky="nsew")
         news_content.columnconfigure(0, weight=1)
         news_content.columnconfigure(1, weight=1)
         news_content.rowconfigure(0, weight=1)
@@ -1115,7 +1178,8 @@ class FloatVocabApp:
         latest_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         latest_frame.columnconfigure(0, weight=1)
         latest_frame.rowconfigure(1, weight=1)
-        ttk.Label(latest_frame, text="最新日报", style="PanelTitle.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 8))
+        self.latest_briefs_label = ttk.Label(latest_frame, text="最新日报", style="PanelTitle.TLabel")
+        self.latest_briefs_label.grid(row=0, column=0, sticky="w", pady=(0, 8))
         self.brief_tree = ttk.Treeview(latest_frame, columns=("source", "published", "title"), show="headings", height=10)
         self.brief_tree.heading("source", text="来源")
         self.brief_tree.heading("published", text="时间")
@@ -1146,7 +1210,8 @@ class FloatVocabApp:
         favorite_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         favorite_frame.columnconfigure(0, weight=1)
         favorite_frame.rowconfigure(1, weight=1)
-        ttk.Label(favorite_frame, text="个人收藏", style="PanelTitle.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 8))
+        self.favorite_articles_label = ttk.Label(favorite_frame, text="个人收藏", style="PanelTitle.TLabel")
+        self.favorite_articles_label.grid(row=0, column=0, sticky="w", pady=(0, 8))
         self.favorite_tree = ttk.Treeview(favorite_frame, columns=("source", "saved", "title"), show="headings", height=10)
         self.favorite_tree.heading("source", text="来源")
         self.favorite_tree.heading("saved", text="收藏时间")
@@ -1173,12 +1238,33 @@ class FloatVocabApp:
         self.refresh_favorite_list()
         self.refresh_example_status()
 
+    def language_display(self, language_code: str) -> str:
+        language_map = dict(self.settings_service.list_supported_languages())
+        return f"{language_map.get(language_code, language_code)} · {language_code}"
+
+    def selected_language_code(self) -> str | None:
+        value = self.language_var.get().strip()
+        if not value:
+            return None
+        if " · " in value:
+            return value.rsplit(" · ", 1)[1]
+        return value
+
+    def active_language_code(self) -> str:
+        return self.selected_language_code() or self.settings_service.get_plan_settings()["current_language_code"] or DEFAULT_LANGUAGE_CODE
+
     def refresh_lexicons(self):
-        self.lexicons = self.db.lexicons()
+        plan = self.settings_service.get_plan_settings()
+        self.language_options = self.settings_service.list_supported_languages()
+        language_values = [self.language_display(code) for code, _label in self.language_options]
+        current_language_code = plan["current_language_code"] or DEFAULT_LANGUAGE_CODE
+        self.lexicons = self.db.lexicons(current_language_code)
         values = [f"{row['id']} · {row['name']} ({row['mastered'] or 0}/{row['total'] or 0})" for row in self.lexicons]
         self.lexicon_combo["values"] = values
-        plan = self.settings_service.get_plan_settings()
+        self.language_combo["values"] = language_values
         self.loading_plan = True
+        self.language_var.set(self.language_display(current_language_code))
+        self.lexicon_var.set("")
         for index, row in enumerate(self.lexicons):
             if row["id"] == plan["lexicon_id"]:
                 self.lexicon_combo.current(index)
@@ -1190,15 +1276,40 @@ class FloatVocabApp:
         self.bg_color_var.set(plan["bg_color"])
         self.widget_size_var.set(plan["widget_size"] if "widget_size" in plan.keys() else "medium")
         self.loading_plan = False
+        has_lexicons = bool(self.lexicons)
+        self.lexicon_combo.configure(state="readonly" if has_lexicons else "disabled")
+        self.lexicon_state_label.configure(
+            text="当前语言下已有词库，可直接继续学习。"
+            if has_lexicons
+            else "这个语言下还没有词库，先导入一个词包再开始。"
+        )
+        self.import_language_label.configure(text=f"当前导入语言：{self.language_display(current_language_code)}")
+        language_map = dict(self.language_options)
+        language_name = language_map.get(current_language_code, current_language_code)
+        self.content_notebook.tab(2, text=f"{language_name} 日报")
+        self.news_intro_label.configure(text=f"{language_name} 日报和收藏会跟着当前学习语言切换。")
+        self.latest_briefs_label.configure(text=f"{language_name} 最新日报")
+        self.favorite_articles_label.configure(text=f"{language_name} 个人收藏")
+        if not has_lexicons:
+            self.update_text_widget(self.brief_summary, "")
 
     def selected_lexicon_id(self):
         value = self.lexicon_var.get()
         return int(value.split(" · ", 1)[0]) if value else None
 
+    def on_language_selected(self, _event=None):
+        if self.loading_plan:
+            return
+        language_code = self.selected_language_code()
+        if not language_code:
+            return
+        self.settings_service.switch_language(language_code)
+        self.refresh_all()
+
     def save_plan(self):
         lexicon_id = self.selected_lexicon_id()
         if not lexicon_id:
-            messagebox.showwarning(APP_NAME, "请先选择词库。")
+            messagebox.showwarning(APP_NAME, "请先为当前学习语言选择词库。")
             return
         target_date = self.target_date_var.get().strip()
         try:
@@ -1214,6 +1325,7 @@ class FloatVocabApp:
             int(self.font_size_var.get()),
             self.bg_color_var.get().strip() or "#F7FAF5",
             self.widget_size_var.get(),
+            current_language_code=self.active_language_code(),
         )
         self.float_window.apply_style()
         self.refresh_all()
@@ -1254,15 +1366,22 @@ class FloatVocabApp:
         if not file_path:
             return
         try:
-            count, name = self.db.import_words(file_path)
+            count, name, language_code = self.db.import_words(file_path, current_language_code=self.active_language_code())
         except UnicodeDecodeError:
             messagebox.showerror(APP_NAME, "导入失败：请使用 UTF-8 编码保存词库。")
             return
-        messagebox.showinfo(APP_NAME, f"已导入 {name}：{count} 个单词。")
+        except ValueError as exc:
+            messagebox.showerror(APP_NAME, f"导入失败：{exc}")
+            return
+        self.settings_service.switch_language(language_code)
+        messagebox.showinfo(APP_NAME, f"已导入 {name}：{count} 个单词，归入 {self.language_display(language_code)}。")
         self.refresh_all()
 
     def refresh_example_status(self):
         lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
+        if not lexicon_id:
+            self.example_status_label.configure(text="先导入当前语言的词库，再补全例句。")
+            return
         missing = self.study_service.missing_examples_count(lexicon_id)
         self.example_status_label.configure(text=f"当前词库还缺 {missing} 条例句")
 
@@ -1298,6 +1417,10 @@ class FloatVocabApp:
     def refresh_stats(self):
         stats = self.study_service.get_study_stats()
         if not stats:
+            self.progress["value"] = 0
+            self.progress_label.configure(text="当前语言还没有学习数据。")
+            for child in self.heatmap_frame.winfo_children():
+                child.destroy()
             return
         summary = stats["summary"]
         total = summary["total"] or 0
@@ -1348,8 +1471,9 @@ class FloatVocabApp:
         threading.Thread(target=self._refresh_daily_briefs_worker, daemon=True).start()
 
     def _refresh_daily_briefs_worker(self):
+        language_code = self.active_language_code()
         try:
-            self.news_service.refresh_latest_briefs(limit=10)
+            self.news_service.refresh_latest_briefs(language_code=language_code, limit=10)
         except Exception as exc:
             error_message = f"刷新日报失败：{exc}"
             self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1361,12 +1485,16 @@ class FloatVocabApp:
             return
         for item in self.brief_tree.get_children():
             self.brief_tree.delete(item)
-        rows = self.news_service.list_latest_briefs(limit=10)
+        language_code = self.active_language_code()
+        rows = self.news_service.list_latest_briefs(language_code=language_code, limit=10)
         for row in rows:
             published = (row["published_at"] or "")[:16].replace("T", " ")
             saved_tag = " 已收藏" if row["saved"] else ""
             self.brief_tree.insert("", "end", iid=str(row["id"]), values=(row["source_name"], published, row["title"] + saved_tag))
-        self.update_text_widget(self.brief_summary, "")
+        if rows:
+            self.update_text_widget(self.brief_summary, "")
+        else:
+            self.update_text_widget(self.brief_summary, "这个语言还没有配置日报源，或者今天还没有抓到新内容。")
 
     def selected_brief_id(self) -> int | None:
         selection = self.brief_tree.selection()
@@ -1377,7 +1505,7 @@ class FloatVocabApp:
         if not brief_id:
             self.update_text_widget(self.brief_summary, "")
             return
-        row = self.news_service.get_brief(brief_id)
+        row = self.news_service.get_brief(brief_id, language_code=self.active_language_code())
         if not row:
             self.update_text_widget(self.brief_summary, "")
             return
@@ -1393,8 +1521,9 @@ class FloatVocabApp:
         threading.Thread(target=self._save_selected_brief_worker, args=(brief_id,), daemon=True).start()
 
     def _save_selected_brief_worker(self, brief_id: int):
+        language_code = self.active_language_code()
         try:
-            self.news_service.save_brief_to_favorites(brief_id)
+            self.news_service.save_brief_to_favorites(brief_id, language_code=language_code)
         except Exception as exc:
             error_message = f"收藏日报失败：{exc}"
             self.root.after(0, lambda msg=error_message: messagebox.showerror(APP_NAME, msg))
@@ -1411,7 +1540,7 @@ class FloatVocabApp:
             return
         for item in self.favorite_tree.get_children():
             self.favorite_tree.delete(item)
-        rows = self.news_service.list_favorite_articles()
+        rows = self.news_service.list_favorite_articles(language_code=self.active_language_code())
         for row in rows:
             saved = (row["saved_at"] or "")[:16].replace("T", " ")
             self.favorite_tree.insert("", "end", iid=str(row["id"]), values=(row["source_name"], saved, row["title"]))
@@ -1420,7 +1549,7 @@ class FloatVocabApp:
         selection = self.favorite_tree.selection()
         if not selection:
             return
-        article = self.news_service.get_favorite_article(int(selection[0]))
+        article = self.news_service.get_favorite_article(int(selection[0]), language_code=self.active_language_code())
         if article:
             self.article_window.show_article(article)
 
@@ -1459,6 +1588,12 @@ class FloatVocabApp:
             except tk.TclError:
                 pass
             self.poll_after_id = None
+        if hasattr(self, "float_window") and getattr(self.float_window, "round_after_id", None):
+            try:
+                self.float_window.after_cancel(self.float_window.round_after_id)
+            except tk.TclError:
+                pass
+            self.float_window.round_after_id = None
         if hasattr(self, "db") and getattr(self.db, "conn", None) is not None:
             try:
                 self.db.conn.close()
