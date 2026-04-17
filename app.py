@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from tkinter import colorchooser, filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 from floatvocab.db import DEFAULT_LANGUAGE_CODE, initialize_database, open_connection
 from floatvocab.models import WordCard
@@ -138,6 +138,15 @@ class FloatVocabDB:
     def supported_languages(self):
         return self.lexicon_repository.list_supported_languages()
 
+    def get_lexicon(self, lexicon_id: int):
+        return self.lexicon_repository.get_lexicon(lexicon_id)
+
+    def update_lexicon(self, lexicon_id: int, name: str, language_code: str):
+        return self.lexicon_repository.update_lexicon(lexicon_id, name, language_code)
+
+    def delete_lexicon(self, lexicon_id: int):
+        return self.lexicon_repository.delete_lexicon(lexicon_id)
+
     def import_words(
         self,
         file_path: str,
@@ -147,14 +156,22 @@ class FloatVocabDB:
         rows = self.parse_word_file(path)
         supported_codes = {code for code, _label in self.supported_languages()}
         explicit_language_code = next((str(row.get("language_code", "")).strip() for row in rows if str(row.get("language_code", "")).strip()), "")
+        explicit_lexicon_name = next((str(row.get("lexicon_name", "")).strip() for row in rows if str(row.get("lexicon_name", "")).strip()), "")
         language_code = explicit_language_code or current_language_code
         if language_code not in supported_codes:
             raise ValueError(f"Unsupported language_code: {language_code}")
-        imported = self.lexicon_repository.import_word_rows(path.stem, rows, "import", language_code)
-        return imported, path.stem, language_code
+        lexicon_name = explicit_lexicon_name or path.stem
+        imported = self.lexicon_repository.import_word_rows(lexicon_name, rows, "import", language_code)
+        return imported, lexicon_name, language_code
 
     @staticmethod
     def parse_word_file(path: Path) -> list[dict]:
+        if path.suffix.lower() == ".json":
+            with path.open("r", encoding="utf-8-sig") as file:
+                payload = json.load(file)
+            if isinstance(payload, list):
+                return [row for row in payload if isinstance(row, dict)]
+            raise ValueError("JSON word list must be an array of objects")
         if path.suffix.lower() == ".csv":
             with path.open("r", encoding="utf-8-sig", newline="") as file:
                 sample = file.read(2048)
@@ -1085,6 +1102,8 @@ class FloatVocabApp:
         plan_actions.pack(fill="x", pady=(16, 0))
         ttk.Button(plan_actions, text="保存计划", style="Secondary.TButton", command=self.save_plan).pack(side="left")
         ttk.Button(plan_actions, text="导入 TXT / CSV 词库", style="Quiet.TButton", command=self.import_words).pack(side="left", padx=(10, 0))
+        ttk.Button(plan_actions, text="编辑当前词库", style="Quiet.TButton", command=self.edit_selected_lexicon).pack(side="left", padx=(10, 0))
+        ttk.Button(plan_actions, text="删除当前词库", style="Quiet.TButton", command=self.delete_selected_lexicon).pack(side="left", padx=(10, 0))
         ttk.Button(plan_actions, text="补全缺失例句", style="Quiet.TButton", command=self.enrich_examples).pack(side="left", padx=(10, 0))
 
         style_box = self.create_panel(dashboard_tab, "悬浮窗样式", "调整透明度、字号和背景，让桌面复习卡片更顺眼。")
@@ -1361,7 +1380,7 @@ class FloatVocabApp:
     def import_words(self):
         file_path = filedialog.askopenfilename(
             title="选择词库文件",
-            filetypes=[("Word list", "*.txt *.csv"), ("All files", "*.*")],
+            filetypes=[("Word list", "*.txt *.csv *.json"), ("All files", "*.*")],
         )
         if not file_path:
             return
@@ -1375,6 +1394,63 @@ class FloatVocabApp:
             return
         self.settings_service.switch_language(language_code)
         messagebox.showinfo(APP_NAME, f"已导入 {name}：{count} 个单词，归入 {self.language_display(language_code)}。")
+        self.refresh_all()
+
+    def edit_selected_lexicon(self):
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
+        if not lexicon_id:
+            messagebox.showinfo(APP_NAME, "请先选择一个词库。")
+            return
+        lexicon = self.db.get_lexicon(lexicon_id)
+        if not lexicon:
+            messagebox.showwarning(APP_NAME, "当前词库不存在了，请刷新后重试。")
+            self.refresh_all()
+            return
+        new_name = simpledialog.askstring(APP_NAME, "修改词库名称", initialvalue=lexicon["name"], parent=self.root)
+        if new_name is None:
+            return
+        new_name = new_name.strip()
+        if not new_name:
+            messagebox.showwarning(APP_NAME, "词库名称不能为空。")
+            return
+        current_code = lexicon["language_code"]
+        language_map = dict(self.supported_languages())
+        options = "\n".join(f"{code} - {label}" for code, label in self.supported_languages())
+        new_language_code = simpledialog.askstring(
+            APP_NAME,
+            f"修改词库语言\n可选：\n{options}",
+            initialvalue=current_code,
+            parent=self.root,
+        )
+        if new_language_code is None:
+            return
+        new_language_code = new_language_code.strip().lower()
+        if new_language_code not in language_map:
+            messagebox.showwarning(APP_NAME, "语言代码无效，请输入支持的语言代码。")
+            return
+        try:
+            self.db.update_lexicon(lexicon_id, new_name, new_language_code)
+        except sqlite3.IntegrityError:
+            messagebox.showerror(APP_NAME, f"{language_map[new_language_code]} 下已经有同名词库了。")
+            return
+        self.settings_service.switch_language(new_language_code)
+        self.refresh_all()
+        messagebox.showinfo(APP_NAME, f"词库已更新为 {new_name}，归入 {language_map[new_language_code]}。")
+
+    def delete_selected_lexicon(self):
+        lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
+        if not lexicon_id:
+            messagebox.showinfo(APP_NAME, "请先选择一个词库。")
+            return
+        lexicon = self.db.get_lexicon(lexicon_id)
+        if not lexicon:
+            self.refresh_all()
+            return
+        if not messagebox.askyesno(APP_NAME, f"确定删除词库《{lexicon['name']}》吗？词条也会一起删除。"):
+            return
+        active_language = self.active_language_code()
+        self.db.delete_lexicon(lexicon_id)
+        self.settings_service.switch_language(active_language)
         self.refresh_all()
 
     def refresh_example_status(self):

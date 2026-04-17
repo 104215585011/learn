@@ -154,6 +154,58 @@ class MultilingualFoundationTests(unittest.TestCase):
         self.assertEqual(language_code, "es")
         self.assertEqual(lexicon["language_code"], "es")
 
+    def test_import_words_supports_json_payloads(self):
+        json_path = self.temp_root_path / "words.json"
+        json_path.write_text(
+            '[{"word":"ciao","meaning":"你好","language_code":"it","lexicon_name":"Italian Core 1000"},{"word":"grazie","meaning":"谢谢","language_code":"it","lexicon_name":"Italian Core 1000"}]',
+            encoding="utf-8",
+        )
+
+        db = app.FloatVocabDB(self.db_path)
+        self.addCleanup(db.conn.close)
+
+        imported, name, language_code = db.import_words(str(json_path), current_language_code="en")
+        words = db.conn.execute(
+            "SELECT word FROM words WHERE lexicon_id = (SELECT id FROM lexicons WHERE name = ? AND language_code = ?)",
+            (name, "it"),
+        ).fetchall()
+
+        self.assertEqual(imported, 2)
+        self.assertEqual(name, "Italian Core 1000")
+        self.assertEqual(language_code, "it")
+        self.assertEqual({row["word"] for row in words}, {"ciao", "grazie"})
+
+    def test_update_lexicon_can_move_name_across_languages(self):
+        db = app.FloatVocabDB(self.db_path)
+        self.addCleanup(db.conn.close)
+
+        lexicon_id = db.create_lexicon("Starter", "import", "en")
+        updated = db.update_lexicon(lexicon_id, "基础词库", "ja")
+
+        self.assertEqual(updated["name"], "基础词库")
+        self.assertEqual(updated["language_code"], "ja")
+
+    def test_delete_lexicon_removes_associated_words(self):
+        db = app.FloatVocabDB(self.db_path)
+        self.addCleanup(db.conn.close)
+
+        lexicon_id = db.create_lexicon("Temporary", "import", "fr")
+        db.conn.execute(
+            """
+            INSERT INTO words
+            (lexicon_id, word, phonetic, meaning, example, next_review_date)
+            VALUES (?, 'bonjour', '', '你好', '', ?)
+            """,
+            (lexicon_id, date.today().isoformat()),
+        )
+        db.conn.commit()
+
+        db.delete_lexicon(lexicon_id)
+
+        self.assertIsNone(db.get_lexicon(lexicon_id))
+        remaining = db.conn.execute("SELECT COUNT(*) AS total FROM words WHERE lexicon_id = ?", (lexicon_id,)).fetchone()
+        self.assertEqual(remaining["total"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

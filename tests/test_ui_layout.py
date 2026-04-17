@@ -30,19 +30,37 @@ class AppLayoutTests(unittest.TestCase):
             ui.root.destroy()
 
     def test_switching_to_language_without_lexicons_disables_lexicon_selector(self):
-        ui = app.FloatVocabApp()
-        try:
-            ui.language_var.set("Japanese · ja")
-            ui.on_language_selected()
-            ui.root.update_idletasks()
-            ui.root.update()
+        temp_root = Path(app.APP_ROOT) / "tests" / "_tmp_ui_layout" / uuid.uuid4().hex
+        temp_root.mkdir(parents=True, exist_ok=True)
+        db_path = temp_root / "test.db"
 
-            self.assertEqual(ui.active_language_code(), "ja")
-            self.assertEqual(str(ui.lexicon_combo.cget("state")), "disabled")
-            self.assertIn("还没有词库", ui.lexicon_state_label.cget("text"))
-            self.assertIn("没有配置日报源", ui.brief_summary.get("1.0", "end").strip())
+        try:
+            db = app.FloatVocabDB(db_path)
+            db.conn.close()
+
+            with mock.patch.object(app, "DB_PATH", db_path):
+                ui = app.FloatVocabApp()
+                try:
+                    ui.language_var.set("Japanese · ja")
+                    ui.on_language_selected()
+                    ui.root.update_idletasks()
+                    ui.root.update()
+
+                    self.assertEqual(ui.active_language_code(), "ja")
+                    self.assertEqual(str(ui.lexicon_combo.cget("state")), "disabled")
+                    self.assertIn("还没有词库", ui.lexicon_state_label.cget("text"))
+                    self.assertIn("没有配置日报源", ui.brief_summary.get("1.0", "end").strip())
+                finally:
+                    ui.close()
         finally:
-            ui.root.destroy()
+            for _ in range(5):
+                try:
+                    shutil.rmtree(temp_root, ignore_errors=False)
+                    break
+                except PermissionError:
+                    time.sleep(0.1)
+            else:
+                shutil.rmtree(temp_root, ignore_errors=True)
 
     def test_destroying_main_window_closes_database_connection(self):
         ui = app.FloatVocabApp()

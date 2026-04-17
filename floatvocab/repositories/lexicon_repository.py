@@ -66,6 +66,19 @@ class LexiconRepository:
     def get_lexicon(self, lexicon_id: int):
         return self.conn.execute("SELECT * FROM lexicons WHERE id = ?", (lexicon_id,)).fetchone()
 
+    def update_lexicon(self, lexicon_id: int, name: str, language_code: str):
+        self.conn.execute(
+            "UPDATE lexicons SET name = ?, language_code = ? WHERE id = ?",
+            (name, language_code, lexicon_id),
+        )
+        self.conn.commit()
+        return self.get_lexicon(lexicon_id)
+
+    def delete_lexicon(self, lexicon_id: int) -> None:
+        self.conn.execute("DELETE FROM words WHERE lexicon_id = ?", (lexicon_id,))
+        self.conn.execute("DELETE FROM lexicons WHERE id = ?", (lexicon_id,))
+        self.conn.commit()
+
     def first_lexicon_for_language(self, language_code: str):
         return self.conn.execute(
             "SELECT * FROM lexicons WHERE language_code = ? ORDER BY created_at, id LIMIT 1",
