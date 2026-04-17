@@ -126,6 +126,32 @@ class ServiceBoundaryTests(unittest.TestCase):
         self.assertEqual(result, payload)
         enrich_mock.assert_called_once_with(self.db_path, limit=5, refresh=True, lexicon_id=7)
 
+    def test_get_default_db_path_uses_project_root_while_running_from_source(self):
+        db_path = app.get_default_db_path(
+            app_root=Path("C:/workspace/FloatVocab"),
+            frozen=False,
+            env={"APPDATA": "C:/Users/test/AppData/Roaming"},
+        )
+
+        self.assertEqual(db_path, Path("C:/workspace/FloatVocab/floatvocab.db"))
+
+    def test_prepare_runtime_storage_moves_packaged_database_to_appdata(self):
+        temp_root = self.temp_root_path / "packaged-storage"
+        app_root = temp_root / "app"
+        target_root = temp_root / "appdata"
+        app_root.mkdir(parents=True, exist_ok=True)
+        legacy_db_path = app_root / "floatvocab.db"
+        legacy_db_path.write_bytes(b"legacy-db")
+        (app_root / "floatvocab.db-wal").write_bytes(b"legacy-wal")
+        target_db_path = target_root / "FloatVocab" / "floatvocab.db"
+
+        app.prepare_runtime_storage(target_db_path, legacy_db_path)
+
+        self.assertTrue(target_db_path.exists())
+        self.assertEqual(target_db_path.read_bytes(), b"legacy-db")
+        self.assertEqual((target_db_path.parent / "floatvocab.db-wal").read_bytes(), b"legacy-wal")
+        self.assertTrue(target_db_path.parent.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

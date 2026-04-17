@@ -4,6 +4,7 @@ import ctypes.wintypes
 import json
 import os
 import queue
+import shutil
 import sqlite3
 import sys
 import threading
@@ -25,7 +26,6 @@ APP_NAME = "FloatVocab"
 APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
 DATA_DIR = RESOURCE_ROOT / "data"
-DB_PATH = APP_ROOT / "floatvocab.db"
 BUILTIN_LEXICON = DATA_DIR / "kaoyan_50.json"
 VOCAB_SOURCE_DIR = DATA_DIR / "vocab_sources"
 EXAM_LEXICONS = [
@@ -69,6 +69,41 @@ THEME = {
 }
 
 
+def get_user_data_dir(app_name: str = APP_NAME, env: dict[str, str] | None = None, home: Path | None = None) -> Path:
+    env = os.environ if env is None else env
+    appdata_root = env.get("APPDATA") or env.get("LOCALAPPDATA")
+    if appdata_root:
+        return Path(appdata_root) / app_name
+    home_root = Path.home() if home is None else home
+    return home_root / f".{app_name.lower()}"
+
+
+def get_default_db_path(
+    *,
+    app_root: Path = APP_ROOT,
+    frozen: bool | None = None,
+    env: dict[str, str] | None = None,
+) -> Path:
+    runtime_is_frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    if not runtime_is_frozen:
+        return app_root / "floatvocab.db"
+    return get_user_data_dir(env=env) / "floatvocab.db"
+
+
+def prepare_runtime_storage(db_path: Path, legacy_db_path: Path | None = None) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    if not legacy_db_path or legacy_db_path == db_path or not legacy_db_path.exists() or db_path.exists():
+        return
+    for suffix in ("", "-wal", "-shm"):
+        source = Path(f"{legacy_db_path}{suffix}")
+        if source.exists():
+            shutil.copy2(source, Path(f"{db_path}{suffix}"))
+
+
+DB_PATH = get_default_db_path()
+prepare_runtime_storage(DB_PATH, APP_ROOT / "floatvocab.db")
+
+
 class EnrichmentService(_BaseEnrichmentService):
     def __init__(self, db_path: Path):
         super().__init__(db_path)
@@ -80,6 +115,7 @@ class EnrichmentService(_BaseEnrichmentService):
 class FloatVocabDB:
     def __init__(self, db_path: Path):
         self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = open_connection(db_path)
         initialize_database(
             self.conn,
@@ -1452,7 +1488,10 @@ __all__ = [
     "StudyService",
     "WordCard",
     "calculate_srs",
+    "get_default_db_path",
+    "get_user_data_dir",
     "main",
+    "prepare_runtime_storage",
     "qwerty_item_to_word",
     "row_to_card",
     "row_to_word_dict",
