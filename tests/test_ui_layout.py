@@ -12,6 +12,181 @@ import app
 
 
 class AppLayoutTests(unittest.TestCase):
+    def test_build_dashboard_summary_text_prefers_due_and_mastery_snapshot(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.study_service = mock.Mock()
+        ui.study_service.get_study_stats.return_value = {
+            "summary": {
+                "total": 120,
+                "mastered": 84,
+                "due": 18,
+            }
+        }
+
+        summary = ui.build_dashboard_summary_text()
+
+        self.assertEqual(summary, "今日待复习 18 个，已掌握 70%")
+
+    def test_build_dashboard_summary_text_uses_empty_state_when_stats_missing(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.study_service = mock.Mock()
+        ui.study_service.get_study_stats.return_value = None
+
+        summary = ui.build_dashboard_summary_text()
+
+        self.assertEqual(summary, "今天还没有学习记录，先开始一轮复习。")
+
+    def test_build_metric_items_returns_due_mastered_and_total_counts(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        metrics = ui.build_metric_items(
+            {
+                "summary": {
+                    "due": 7,
+                    "mastered": 22,
+                    "total": 40,
+                }
+            }
+        )
+
+        self.assertEqual(
+            metrics,
+            [("今日待复习", "7"), ("已掌握", "22"), ("总词数", "40")],
+        )
+
+    def test_build_heatmap_legend_items_returns_progressive_levels(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        legend = ui.build_heatmap_legend_items()
+
+        self.assertEqual(
+            legend,
+            [
+                ("较少", app.THEME["heat_0"]),
+                ("稳定", app.THEME["heat_1"]),
+                ("投入", app.THEME["heat_2"]),
+                ("高强度", app.THEME["heat_3"]),
+            ],
+        )
+
+    def test_format_brief_preview_includes_structured_metadata_and_state(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        preview = ui.format_brief_preview(
+            {
+                "title": "Morning Brief",
+                "summary": "Key updates for today.",
+                "source_name": "Reuters",
+                "published_at": "2026-04-19T08:30:00",
+                "saved": 1,
+                "url": "https://example.com/brief",
+            }
+        )
+
+        self.assertIn("Morning Brief", preview)
+        self.assertIn("Reuters", preview)
+        self.assertIn("已收藏", preview)
+        self.assertIn("双击条目", preview)
+
+    def test_build_brief_preview_parts_returns_layered_content(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        title, meta, summary, footer = ui.build_brief_preview_parts(
+            {
+                "title": "Morning Brief",
+                "summary": "Key updates for today.",
+                "source_name": "Reuters",
+                "published_at": "2026-04-19T08:30:00",
+                "saved": 0,
+                "url": "https://example.com/brief",
+            }
+        )
+
+        self.assertEqual(title, "Morning Brief")
+        self.assertIn("Reuters", meta)
+        self.assertIn("可收藏并翻译", meta)
+        self.assertEqual(summary, "Key updates for today.")
+        self.assertIn("https://example.com/brief", footer)
+
+    def test_build_news_titles_for_language_uses_reading_first_labels(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        latest_title, favorite_title = ui.build_news_titles_for_language("英语")
+
+        self.assertEqual(latest_title, "英语 最新阅读")
+        self.assertEqual(favorite_title, "英语 收藏夹")
+
+    def test_build_lexicon_state_text_returns_actionable_copy(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        self.assertEqual(
+            ui.build_lexicon_state_text(True),
+            "当前语言下已有词库，可以直接继续学习。",
+        )
+        self.assertEqual(
+            ui.build_lexicon_state_text(False),
+            "这个语言下还没有词库，先导入一个词包再开始。",
+        )
+
+    def test_build_brief_empty_state_distinguishes_empty_vs_unconfigured(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        title, meta, summary, footer = ui.build_brief_empty_state(has_lexicons=False)
+        self.assertIn("还没有新内容", title)
+        self.assertIn("没有配置日报源", meta)
+        self.assertIn("没有配置日报源", summary)
+        self.assertIn("先导入词库", footer)
+
+        title, meta, summary, footer = ui.build_brief_empty_state(has_lexicons=True)
+        self.assertIn("还没有新内容", title)
+        self.assertIn("稍后刷新", footer)
+        self.assertEqual(meta, "这个语言还没有配置日报源，或者今天还没有抓到新内容。")
+        self.assertEqual(summary, "这个语言还没有配置日报源，或者今天还没有抓到新内容。")
+
+    def test_floating_window_header_text_uses_card_presence(self):
+        floating = app.FloatingWindow.__new__(app.FloatingWindow)
+        floating.card = None
+        self.assertEqual(floating.build_header_text(), "FloatVocab · 准备开始")
+
+        floating.card = app.WordCard(
+            id=1,
+            word="abandon",
+            phonetic="/test/",
+            meaning="放弃",
+            example="Example",
+            status="new",
+            lexicon_name="test",
+        )
+        self.assertEqual(floating.build_header_text(), "FloatVocab · 当前学习卡")
+
+    def test_floating_window_header_subtitle_changes_with_card_state(self):
+        floating = app.FloatingWindow.__new__(app.FloatingWindow)
+        floating.card = None
+        floating.flipped = False
+        self.assertEqual(floating.build_header_subtitle(), "拖动卡片开始今天的复习。")
+
+        floating.card = app.WordCard(
+            id=1,
+            word="abandon",
+            phonetic="/test/",
+            meaning="放弃",
+            example="Example",
+            status="new",
+            lexicon_name="test",
+        )
+        self.assertEqual(floating.build_header_subtitle(), "正面 · 点击翻面查看释义。")
+
+        floating.flipped = True
+        self.assertEqual(floating.build_header_subtitle(), "释义面 · 左右键快速判断。")
+
+    def test_floating_window_shortcut_hint_is_compact(self):
+        floating = app.FloatingWindow.__new__(app.FloatingWindow)
+
+        self.assertEqual(
+            floating.build_shortcut_hint(),
+            "快捷键：Space 翻面 · ← 不认识 · → 认识",
+        )
+
     def test_main_window_exposes_bottom_content_tabs(self):
         ui = app.FloatVocabApp()
         try:
