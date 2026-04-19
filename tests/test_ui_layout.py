@@ -36,6 +36,258 @@ class AppLayoutTests(unittest.TestCase):
 
         self.assertEqual(summary, "今天还没有学习记录，先开始一轮复习。")
 
+    def test_build_dashboard_badge_items_returns_today_snapshot_cards(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.study_service = mock.Mock()
+        ui.study_service.get_study_stats.return_value = {
+            "summary": {
+                "total": 120,
+                "mastered": 84,
+                "due": 18,
+            }
+        }
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = {
+            "current_language_code": "en",
+            "lexicon_id": 7,
+        }
+        ui.settings_service.list_supported_languages.return_value = [("en", "英语")]
+        ui.db = mock.Mock()
+        ui.db.get_lexicon.return_value = {"id": 7, "name": "考研词汇"}
+
+        badges = ui.build_dashboard_badge_items()
+
+        self.assertEqual(
+            badges,
+            [("今日待复习", "18"), ("已掌握", "70%"), ("当前词库", "考研词汇")],
+        )
+
+    def test_build_dashboard_badge_items_supports_row_like_plan_objects(self):
+        class RowLikePlan:
+            def __getitem__(self, key):
+                values = {
+                    "current_language_code": "en",
+                    "lexicon_id": 9,
+                }
+                return values[key]
+
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.study_service = mock.Mock()
+        ui.study_service.get_study_stats.return_value = {
+            "summary": {
+                "total": 40,
+                "mastered": 10,
+                "due": 6,
+            }
+        }
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = RowLikePlan()
+        ui.db = mock.Mock()
+        ui.db.get_lexicon.return_value = {"id": 9, "name": "基础词库"}
+
+        badges = ui.build_dashboard_badge_items()
+
+        self.assertEqual(
+            badges,
+            [("今日待复习", "6"), ("已掌握", "25%"), ("当前词库", "基础词库")],
+        )
+
+    def test_build_dashboard_intro_text_mentions_today_focus(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        self.assertEqual(
+            ui.build_dashboard_intro_text(),
+            "今天先完成复习，再决定是否调整计划和样式。",
+        )
+
+    def test_build_dashboard_focus_steps_returns_three_startup_actions(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.study_service = mock.Mock()
+        ui.study_service.get_study_stats.return_value = {
+            "summary": {
+                "total": 120,
+                "mastered": 84,
+                "due": 18,
+            }
+        }
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = {
+            "current_language_code": "en",
+            "lexicon_id": 7,
+            "daily_new": 20,
+        }
+        ui.db = mock.Mock()
+        ui.db.get_lexicon.return_value = {"id": 7, "name": "考研词汇"}
+
+        steps = ui.build_dashboard_focus_steps()
+
+        self.assertEqual(len(steps), 3)
+        self.assertEqual(steps[0][0], "01")
+        self.assertIn("18 个待复习", steps[0][2])
+        self.assertIn("考研词汇", steps[1][2])
+        self.assertIn("20 个新词", steps[1][2])
+        self.assertIn("悬浮窗", steps[2][2])
+
+    def test_build_dashboard_focus_steps_supports_missing_lexicon(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.study_service = mock.Mock()
+        ui.study_service.get_study_stats.return_value = None
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = {
+            "current_language_code": "en",
+            "lexicon_id": None,
+            "daily_new": 12,
+        }
+        ui.db = mock.Mock()
+
+        steps = ui.build_dashboard_focus_steps()
+
+        self.assertIn("0 个待复习", steps[0][2])
+        self.assertIn("先选一个词库", steps[1][2])
+
+    def test_build_plan_snapshot_items_summarizes_language_lexicon_and_target(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = {
+            "current_language_code": "en",
+            "lexicon_id": 7,
+            "daily_new": 20,
+            "target_date": "2026-05-20",
+        }
+        ui.settings_service.list_supported_languages.return_value = [("en", "英语"), ("ja", "日语")]
+        ui.db = mock.Mock()
+        ui.db.get_lexicon.return_value = {"id": 7, "name": "考研词汇"}
+
+        items = ui.build_plan_snapshot_items()
+
+        self.assertEqual(
+            items,
+            [("学习语言", "英语"), ("当前词库", "考研词汇"), ("学习节奏", "20 个/天 · 截止 2026-05-20")],
+        )
+
+    def test_build_style_snapshot_items_formats_float_window_preferences(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = {
+            "float_alpha": 0.88,
+            "font_size": 26,
+            "bg_color": "#F7FAF5",
+            "widget_size": "medium",
+        }
+
+        items = ui.build_style_snapshot_items()
+
+        self.assertEqual(
+            items,
+            [("透明度", "88%"), ("字号", "26 px"), ("卡片尺寸", "MEDIUM · #F7FAF5")],
+        )
+
+    def test_build_stats_progress_text_summarizes_completion_snapshot(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        text = ui.build_stats_progress_text(
+            {
+                "summary": {
+                    "total": 120,
+                    "mastered": 84,
+                    "fuzzy": 9,
+                    "due": 18,
+                }
+            }
+        )
+
+        self.assertEqual(text, "完成度 70% · 已掌握 84/120 · 模糊 9 · 今日待复习 18")
+
+    def test_build_stats_spotlight_items_returns_dashboard_cards(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        items = ui.build_stats_spotlight_items(
+            {
+                "summary": {
+                    "total": 120,
+                    "mastered": 84,
+                    "fuzzy": 9,
+                    "due": 18,
+                },
+                "days": [
+                    {"day": "2026-04-17", "reviewed": 12},
+                    {"day": "2026-04-18", "reviewed": 8},
+                    {"day": "2026-04-19", "reviewed": 14},
+                ],
+            }
+        )
+
+        self.assertEqual(
+            items,
+            [("今日待复习", "18"), ("模糊词", "9"), ("活跃天数", "3/30")],
+        )
+
+    def test_build_heatmap_caption_text_summarizes_recent_streak(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        caption = ui.build_heatmap_caption_text(
+            {
+                "days": [
+                    {"day": "2026-04-17", "reviewed": 12},
+                    {"day": "2026-04-18", "reviewed": 8},
+                    {"day": "2026-04-19", "reviewed": 14},
+                ]
+            }
+        )
+
+        self.assertEqual(caption, "最近 30 天累计复习 34 次，有记录的学习日是 3 天。")
+
+    def test_build_words_overview_text_summarizes_language_and_lexicon(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = {
+            "current_language_code": "en",
+            "lexicon_id": 7,
+        }
+        ui.settings_service.list_supported_languages.return_value = [("en", "英语")]
+        ui.db = mock.Mock()
+        ui.db.get_lexicon.return_value = {"id": 7, "name": "考研词汇"}
+
+        text = ui.build_words_overview_text()
+
+        self.assertEqual(text, "当前正在浏览英语 · 考研词汇，最近更新的词条会显示在这里。")
+
+    def test_build_news_overview_items_summarizes_language_and_actions(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+        ui.settings_service = mock.Mock()
+        ui.settings_service.get_plan_settings.return_value = {
+            "current_language_code": "ja",
+        }
+        ui.settings_service.list_supported_languages.return_value = [("ja", "日语")]
+
+        items = ui.build_news_overview_items()
+
+        self.assertEqual(
+            items,
+            [("当前语言", "日语"), ("内容节奏", "最新 10 篇"), ("操作入口", "收藏并翻译")],
+        )
+
+    def test_build_words_action_hint_encourages_fast_browsing(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        self.assertEqual(
+            ui.build_words_action_hint(),
+            "切换词库后列表会立刻刷新，适合快速扫一遍最近新增或刚复习过的词条。",
+        )
+
+    def test_build_news_action_hint_guides_refresh_and_collect_flow(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        self.assertEqual(
+            ui.build_news_action_hint(),
+            "先刷新，再选中条目预览；觉得合适就直接收藏并翻译。",
+        )
+
+    def test_build_words_tab_title_uses_language_name(self):
+        ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
+
+        self.assertEqual(ui.build_words_tab_title("英语"), "英语 词库概览")
+
     def test_build_metric_items_returns_due_mastered_and_total_counts(self):
         ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
 
@@ -198,7 +450,7 @@ class AppLayoutTests(unittest.TestCase):
             self.assertGreater(ui.content_notebook.winfo_height(), 240)
 
             tab_labels = [ui.content_notebook.tab(tab_id, "text") for tab_id in ui.content_notebook.tabs()]
-            self.assertIn("词库概览", tab_labels)
+            self.assertTrue(any("词库概览" in label for label in tab_labels))
             expected_news_tab = f"{dict(ui.settings_service.list_supported_languages())[ui.active_language_code()]} 日报"
             self.assertIn(expected_news_tab, tab_labels)
         finally:
