@@ -438,6 +438,52 @@ class AppLayoutTests(unittest.TestCase):
             floating.build_shortcut_hint(),
             "快捷键：Space 翻面 · ← 不认识 · → 认识",
         )
+
+    def test_floating_window_flipped_side_keeps_meaning_visible(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/test/",
+                meaning="放弃；抛弃",
+                example="Example sentence",
+                status="new",
+                lexicon_name="test",
+            )
+            ui.float_window.flipped = True
+            ui.float_window.apply_style()
+            ui.float_window.render()
+
+            visible_text = "\n".join(
+                [ui.float_window.word_label.cget("text"), ui.float_window.detail_label.cget("text")]
+            )
+            self.assertIn("放弃", visible_text)
+        finally:
+            ui.close()
+
+    def test_floating_window_flipped_side_keeps_word_as_title_for_short_meaning(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.db.save_float_style(0.88, 28, "#F7FAF5", "large")
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/test/",
+                meaning="放弃；抛弃",
+                example="Example sentence",
+                status="new",
+                lexicon_name="test",
+            )
+            ui.float_window.flipped = True
+            ui.float_window.apply_style()
+            ui.float_window.render()
+
+            self.assertEqual(ui.float_window.word_label.cget("text"), "abandon")
+            self.assertIn("放弃", ui.float_window.detail_label.cget("text"))
+        finally:
+            ui.close()
+
     def test_main_window_exposes_brand_header_and_today_workbench(self):
         ui = app.FloatVocabApp()
         try:

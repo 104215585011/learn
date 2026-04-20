@@ -561,8 +561,8 @@ class FloatingWindow(tk.Toplevel):
             else:
                 meaning_font_size = max(self.detail_font_size, min(self.word_font_size, 18))
                 self.word_label.configure(font=("Segoe UI", meaning_font_size, "bold"))
-                self.word_label.configure(text=self.card.meaning)
-                self.detail_label.configure(text=self.build_flipped_detail(include_example=True, include_meaning=False))
+                self.word_label.configure(text=self.card.word)
+                self.detail_label.configure(text=self.build_flipped_detail(include_example=True, include_meaning=True))
         else:
             self.word_label.configure(font=("Segoe UI", self.word_font_size, "bold"))
             self.word_label.configure(text=self.card.word)
