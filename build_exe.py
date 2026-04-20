@@ -7,9 +7,10 @@ ROOT = Path(__file__).resolve().parent
 BUILD_ROOT = ROOT / "build"
 DIST_ROOT = ROOT / "dist"
 ICON_PATH = ROOT / "assets" / "floatvocab.ico"
+ENTRY_SCRIPT = ROOT / "launch.pyw"
 
 
-def main() -> int:
+def build_command() -> list[str]:
     command = [
         sys.executable,
         "-m",
@@ -30,8 +31,12 @@ def main() -> int:
     ]
     if ICON_PATH.exists():
         command.extend(["--icon", str(ICON_PATH)])
-    command.append(str(ROOT / "app.py"))
-    return subprocess.call(command, cwd=ROOT)
+    command.append(str(ENTRY_SCRIPT))
+    return command
+
+
+def main() -> int:
+    return subprocess.call(build_command(), cwd=ROOT)
 
 
 if __name__ == "__main__":

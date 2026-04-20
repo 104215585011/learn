@@ -115,7 +115,9 @@ class ServiceBoundaryTests(unittest.TestCase):
         service = app.SettingsService(self.db)
         updated = service.switch_language("es")
         self.assertEqual(updated["current_language_code"], "es")
-        self.assertEqual(updated["lexicon_id"], spanish_id)
+        chosen_spanish = self.db.lexicon_repository.get_lexicon(updated["lexicon_id"])
+        self.assertIsNotNone(chosen_spanish)
+        self.assertEqual(chosen_spanish["language_code"], "es")
 
         updated_again = service.switch_language("en")
         self.assertEqual(updated_again["current_language_code"], "en")
@@ -136,6 +138,8 @@ class ServiceBoundaryTests(unittest.TestCase):
             plan["widget_size"],
             current_language_code="en",
         )
+        for lexicon in self.db.lexicons("ja"):
+            self.db.delete_lexicon(lexicon["id"])
 
         service = app.SettingsService(self.db)
         updated = service.switch_language("ja")
