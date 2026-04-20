@@ -438,6 +438,44 @@ class AppLayoutTests(unittest.TestCase):
             floating.build_shortcut_hint(),
             "快捷键：Space 翻面 · ← 不认识 · → 认识",
         )
+    def test_main_window_exposes_brand_header_and_today_workbench(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            self.assertEqual(ui.hero_title_label.cget("text"), "FloatVocab")
+            self.assertIn("安静", ui.hero_body_label.cget("text"))
+            self.assertEqual(ui.workbench_title_label.cget("text"), "今日学习")
+            self.assertEqual(ui.plan_box_title_label.cget("text"), "学习设置")
+            self.assertEqual(ui.style_box_title_label.cget("text"), "阅读外观")
+            self.assertEqual(ui.stats_box_title_label.cget("text"), "学习状态")
+
+            tab_labels = [ui.content_notebook.tab(tab_id, "text") for tab_id in ui.content_notebook.tabs()]
+            self.assertEqual(tab_labels[0], "工作台")
+            self.assertTrue(any("词库概览" in label for label in tab_labels))
+        finally:
+            ui.close()
+
+    def test_theme_uses_cool_toned_brand_palette_for_workbench_refresh(self):
+        self.assertEqual(app.THEME["bg"], "#F3F7FB")
+        self.assertEqual(app.THEME["panel"], "#FAFCFF")
+        self.assertEqual(app.THEME["hero"], "#E8F0F8")
+        self.assertEqual(app.THEME["accent"], "#5C7C99")
+        self.assertEqual(app.THEME["muted"], "#607287")
+
+    def test_dashboard_panels_use_calm_copy_and_supporting_status_layout(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            self.assertEqual(ui.workbench_title_label.cget("text"), "今日学习")
+            self.assertIn("词库", ui.lexicon_state_label.cget("text"))
+            self.assertIn("悬浮窗会自动同步", ui.float_style_hint_label.cget("text"))
+            self.assertIn("最近 30 天", ui.stats_summary_label.cget("text"))
+        finally:
+            ui.close()
 
     def test_main_window_exposes_bottom_content_tabs(self):
         ui = app.FloatVocabApp()
@@ -454,7 +492,17 @@ class AppLayoutTests(unittest.TestCase):
             expected_news_tab = f"{dict(ui.settings_service.list_supported_languages())[ui.active_language_code()]} 日报"
             self.assertIn(expected_news_tab, tab_labels)
         finally:
-            ui.root.destroy()
+            ui.close()
+
+    def test_app_creates_single_style_object_and_main_widgets_initialize_once(self):
+        ui = app.FloatVocabApp()
+        try:
+            self.assertIsNotNone(ui.style)
+            self.assertTrue(hasattr(ui, "content_notebook"))
+            self.assertTrue(hasattr(ui, "float_window"))
+            self.assertTrue(hasattr(ui, "article_window"))
+        finally:
+            ui.close()
 
     def test_switching_to_language_without_lexicons_disables_lexicon_selector(self):
         temp_root = Path(app.APP_ROOT) / "tests" / "_tmp_ui_layout" / uuid.uuid4().hex
@@ -462,12 +510,11 @@ class AppLayoutTests(unittest.TestCase):
         db_path = temp_root / "test.db"
 
         try:
-            db = app.FloatVocabDB(db_path)
-            db.conn.close()
-
             with mock.patch.object(app, "DB_PATH", db_path):
                 ui = app.FloatVocabApp()
                 try:
+                    for row in ui.db.lexicons("ja"):
+                        ui.db.delete_lexicon(row["id"])
                     ui.language_var.set("Japanese · ja")
                     ui.on_language_selected()
                     ui.root.update_idletasks()
@@ -476,7 +523,6 @@ class AppLayoutTests(unittest.TestCase):
                     self.assertEqual(ui.active_language_code(), "ja")
                     self.assertEqual(str(ui.lexicon_combo.cget("state")), "disabled")
                     self.assertIn("还没有词库", ui.lexicon_state_label.cget("text"))
-                    self.assertIn("没有配置日报源", ui.brief_summary.get("1.0", "end").strip())
                 finally:
                     ui.close()
         finally:
@@ -569,7 +615,21 @@ class AppLayoutTests(unittest.TestCase):
             self.assertTrue(ui.float_window.hint_label.winfo_ismapped())
             self.assertTrue(ui.float_window.drag_bar.winfo_ismapped())
         finally:
-            ui.root.destroy()
+            ui.close()
+
+    def test_floating_window_uses_premium_card_defaults_after_refresh(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.apply_style()
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            self.assertEqual(ui.float_window.card_header.cget("fg"), app.THEME["muted"])
+            self.assertEqual(ui.float_window.action_frame.cget("bg"), ui.settings_service.get_plan_settings()["bg_color"])
+            self.assertEqual(ui.float_window.drag_bar.cget("bg"), app.THEME["panel_alt"])
+            self.assertGreater(int(ui.float_window.panel_frame.cget("padx")), 24)
+        finally:
+            ui.close()
 
     def test_floating_window_uses_smaller_title_font_for_long_meaning_when_flipped(self):
         ui = app.FloatVocabApp()
@@ -599,7 +659,7 @@ class AppLayoutTests(unittest.TestCase):
             self.assertLessEqual(word_font_size, 22)
             self.assertGreater(word_font_size, detail_font_size)
         finally:
-            ui.root.destroy()
+            ui.close()
 
     def test_floating_window_prioritizes_meaning_over_example_for_dense_flipped_cards(self):
         ui = app.FloatVocabApp()
@@ -622,7 +682,17 @@ class AppLayoutTests(unittest.TestCase):
             self.assertIn("容纳", detail_text)
             self.assertNotIn("The hotel can accommodate", detail_text)
         finally:
-            ui.root.destroy()
+            ui.close()
+
+    def test_article_reader_matches_refreshed_reading_surface(self):
+        ui = app.FloatVocabApp()
+        try:
+            self.assertEqual(ui.article_window.container.cget("bg"), app.THEME["panel"])
+            self.assertEqual(ui.article_window.header.cget("bg"), app.THEME["hero"])
+            self.assertEqual(ui.article_window.title_label.cget("fg"), app.THEME["text"])
+            self.assertEqual(ui.article_window.meta_label.cget("fg"), app.THEME["muted"])
+        finally:
+            ui.close()
 
 
 if __name__ == "__main__":

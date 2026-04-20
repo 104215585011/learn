@@ -1,3 +1,4 @@
+import json
 import shutil
 import sqlite3
 import unittest
@@ -157,7 +158,7 @@ class MultilingualFoundationTests(unittest.TestCase):
     def test_import_words_supports_json_payloads(self):
         json_path = self.temp_root_path / "words.json"
         json_path.write_text(
-            '[{"word":"ciao","meaning":"你好","language_code":"it","lexicon_name":"Italian Core 1000"},{"word":"grazie","meaning":"谢谢","language_code":"it","lexicon_name":"Italian Core 1000"}]',
+            '[{"word":"ciao","meaning":"你好","language_code":"it","lexicon_name":"Italian Custom Import"},{"word":"grazie","meaning":"谢谢","language_code":"it","lexicon_name":"Italian Custom Import"}]',
             encoding="utf-8",
         )
 
@@ -171,9 +172,61 @@ class MultilingualFoundationTests(unittest.TestCase):
         ).fetchall()
 
         self.assertEqual(imported, 2)
-        self.assertEqual(name, "Italian Core 1000")
+        self.assertEqual(name, "Italian Custom Import")
         self.assertEqual(language_code, "it")
         self.assertEqual({row["word"] for row in words}, {"ciao", "grazie"})
+
+    def test_initialize_database_auto_imports_multilingual_json_packs_without_switching_plan_language(self):
+        vocab_root = self.temp_root_path / "vocab_sources"
+        (vocab_root / "es").mkdir(parents=True, exist_ok=True)
+        (vocab_root / "es" / "spanish_core_1000.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "word": "hola",
+                        "meaning": "hello",
+                        "phonetic": "",
+                        "example": "",
+                        "language_code": "es",
+                        "lexicon_name": "Spanish Core 1000",
+                    },
+                    {
+                        "word": "gracias",
+                        "meaning": "thanks",
+                        "phonetic": "",
+                        "example": "",
+                        "language_code": "es",
+                        "lexicon_name": "Spanish Core 1000",
+                    },
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        conn = open_connection(self.db_path)
+        self.addCleanup(conn.close)
+
+        initialize_database(
+            conn,
+            builtin_lexicon=app.BUILTIN_LEXICON,
+            vocab_source_dir=vocab_root,
+            exam_lexicons=[],
+            qwerty_item_to_word=app.qwerty_item_to_word,
+        )
+
+        spanish = conn.execute(
+            "SELECT id, name, language_code FROM lexicons WHERE name = ? AND language_code = ?",
+            ("Spanish Core 1000", "es"),
+        ).fetchone()
+        self.assertIsNotNone(spanish)
+        spanish_words = conn.execute(
+            "SELECT word FROM words WHERE lexicon_id = ? ORDER BY word",
+            (spanish["id"],),
+        ).fetchall()
+        plan = conn.execute("SELECT current_language_code FROM plans WHERE id = 1").fetchone()
+
+        self.assertEqual([row["word"] for row in spanish_words], ["gracias", "hola"])
+        self.assertEqual(plan["current_language_code"], DEFAULT_LANGUAGE_CODE)
 
     def test_update_lexicon_can_move_name_across_languages(self):
         db = app.FloatVocabDB(self.db_path)

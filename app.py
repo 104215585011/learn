@@ -49,16 +49,16 @@ STATUS_FUZZY = "fuzzy"
 STATUS_MASTERED = "mastered"
 
 THEME = {
-    "bg": "#F3F8FE",
-    "panel": "#FFFFFF",
-    "panel_alt": "#EEF6FF",
-    "hero": "#E7F3FF",
-    "border": "#D7E7F7",
-    "text": "#17324D",
-    "muted": "#617A93",
-    "accent": "#2B84F6",
-    "accent_active": "#1A6ED8",
-    "accent_soft": "#D8EBFF",
+    "bg": "#F3F7FB",
+    "panel": "#FAFCFF",
+    "panel_alt": "#F0F5FA",
+    "hero": "#E8F0F8",
+    "border": "#D9E3EC",
+    "text": "#1F2D3D",
+    "muted": "#607287",
+    "accent": "#5C7C99",
+    "accent_active": "#496983",
+    "accent_soft": "#DCE7F1",
     "success": "#21A366",
     "danger": "#EF6A6A",
     "warning": "#F2A93B",
@@ -417,6 +417,7 @@ class FloatingWindow(tk.Toplevel):
     def apply_style(self):
         plan = self.app.settings_service.get_plan_settings()
         bg = plan["bg_color"]
+        surface_bg = THEME["panel"]
         alpha = float(plan["float_alpha"])
         font_size = int(plan["font_size"])
         widget_size = plan["widget_size"] if "widget_size" in plan.keys() else "medium"
@@ -436,7 +437,8 @@ class FloatingWindow(tk.Toplevel):
         if self.winfo_width() <= 1 or self.winfo_height() <= 1:
             self.geometry(self.widget_geometry(width, height))
         self.configure(bg=bg)
-        for widget in [self.panel_frame, self.header_frame, self.content_frame, self.action_frame]:
+        self.panel_frame.configure(bg=bg, padx=28, pady=24)
+        for widget in [self.header_frame, self.content_frame, self.action_frame]:
             widget.configure(bg=bg)
         self.drag_bar.configure(bg=THEME["panel_alt"], height=8)
         self.card_header.configure(bg=bg, fg=THEME["muted"], font=("Segoe UI", 11, "bold"), text=self.build_header_text())
@@ -812,6 +814,7 @@ class FloatVocabApp:
         self.style.configure("PanelTitle.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 12, "bold"))
         self.style.configure("HeroTitle.TLabel", background=THEME["hero"], foreground=THEME["text"], font=("Segoe UI", 24, "bold"))
         self.style.configure("HeroBody.TLabel", background=THEME["hero"], foreground=THEME["muted"], font=("Segoe UI", 10))
+        self.style.configure("WorkbenchTitle.TLabel", background=THEME["bg"], foreground=THEME["text"], font=("Segoe UI", 15, "bold"))
         self.style.configure("SectionLabel.TLabel", background=THEME["panel"], foreground=THEME["muted"], font=("Segoe UI", 9, "bold"))
         self.style.configure("Body.TLabel", background=THEME["panel"], foreground=THEME["text"], font=("Segoe UI", 10))
         self.style.configure("Muted.TLabel", background=THEME["panel"], foreground=THEME["muted"], font=("Segoe UI", 9))
@@ -923,11 +926,11 @@ class FloatVocabApp:
 
     def create_panel(self, parent, title: str, subtitle: str | None = None):
         panel = ttk.Frame(parent, style="Panel.TFrame", padding=18)
-        ttk.Label(panel, text=title, style="PanelTitle.TLabel").pack(anchor="w")
+        panel.title_label = ttk.Label(panel, text=title, style="PanelTitle.TLabel")
+        panel.title_label.pack(anchor="w")
         if subtitle:
             ttk.Label(panel, text=subtitle, style="Muted.TLabel", wraplength=460, justify="left").pack(anchor="w", pady=(4, 14))
         return panel
-
     def build_dashboard_summary_text(self) -> str:
         stats = self.study_service.get_study_stats()
         if not stats:
@@ -1178,30 +1181,38 @@ class FloatVocabApp:
         hero = ttk.Frame(shell, style="Hero.TFrame", padding=22)
         hero.grid(row=0, column=0, sticky="ew")
         hero.columnconfigure(0, weight=1)
-        ttk.Label(hero, text="FloatVocab", style="HeroTitle.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(
+        self.hero_title_label = ttk.Label(hero, text="FloatVocab", style="HeroTitle.TLabel")
+        self.hero_title_label.grid(row=0, column=0, sticky="w")
+        self.hero_kicker_label = ttk.Label(
             hero,
             text="今日学习区",
             style="HeroBody.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        )
+        self.hero_kicker_label.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.hero_body_label = ttk.Label(
+            hero,
+            text="安静、克制的桌面学习空间，让今天的词汇计划和阅读内容更容易进入状态。",
+            style="HeroBody.TLabel",
+        )
+        self.hero_body_label.grid(row=2, column=0, sticky="w", pady=(4, 0))
         self.hero_summary_label = ttk.Label(
             hero,
             text=self.build_dashboard_summary_text(),
             style="PanelTitle.TLabel",
         )
-        self.hero_summary_label.grid(row=2, column=0, sticky="w", pady=(10, 0))
+        self.hero_summary_label.grid(row=3, column=0, sticky="w", pady=(10, 0))
         self.hero_intro_label = ttk.Label(
             hero,
             text=self.build_dashboard_intro_text(),
             style="HeroBody.TLabel",
         )
-        self.hero_intro_label.grid(row=3, column=0, sticky="w", pady=(6, 0))
+        self.hero_intro_label.grid(row=4, column=0, sticky="w", pady=(6, 0))
         hero_actions = ttk.Frame(hero, style="Hero.TFrame")
-        hero_actions.grid(row=0, column=1, rowspan=4, sticky="e")
+        hero_actions.grid(row=0, column=1, rowspan=5, sticky="e")
         ttk.Button(hero_actions, text="继续复习", style="Primary.TButton", command=self.float_window.show_next).pack(side="left", padx=(0, 10))
         ttk.Button(hero_actions, text="刷新日报", style="Secondary.TButton", command=self.refresh_daily_briefs).pack(side="left")
         hero_badges = ttk.Frame(hero, style="Hero.TFrame")
-        hero_badges.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(16, 0))
+        hero_badges.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(16, 0))
         self.hero_badge_value_labels: list[ttk.Label] = []
         for index, (label_text, value_text) in enumerate(self.build_dashboard_badge_items()):
             badge = ttk.Frame(hero_badges, style="Panel.TFrame", padding=(14, 12))
@@ -1218,10 +1229,13 @@ class FloatVocabApp:
         dashboard_tab.columnconfigure(0, weight=1)
         dashboard_tab.columnconfigure(1, weight=1)
         dashboard_tab.rowconfigure(3, weight=1)
-        self.content_notebook.add(dashboard_tab, text="学习台")
+        self.content_notebook.add(dashboard_tab, text="工作台")
+
+        self.workbench_title_label = ttk.Label(dashboard_tab, text="今日学习", style="WorkbenchTitle.TLabel")
+        self.workbench_title_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 14))
 
         focus_box = self.create_panel(dashboard_tab, "今日路线", "首页先告诉你今天怎么学，再去碰设置和样式。")
-        focus_box.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 18))
+        focus_box.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 18))
         focus_strip = ttk.Frame(focus_box, style="Panel.TFrame")
         focus_strip.pack(fill="x")
         self.dashboard_focus_title_labels: list[ttk.Label] = []
@@ -1238,8 +1252,9 @@ class FloatVocabApp:
             self.dashboard_focus_title_labels.append(title_label)
             self.dashboard_focus_body_labels.append(body_label)
 
-        plan_box = self.create_panel(dashboard_tab, "学习计划", "先确定词库和每日目标，再进入今天的背词节奏。")
-        plan_box.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
+        plan_box = self.create_panel(dashboard_tab, "学习设置", "先确定词库和每日目标，再进入今天的背词节奏。")
+        self.plan_box_title_label = plan_box.title_label
+        plan_box.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
         plan_snapshot = ttk.Frame(plan_box, style="Panel.TFrame")
         plan_snapshot.pack(fill="x", pady=(0, 14))
         self.plan_snapshot_value_labels: list[ttk.Label] = []
@@ -1287,8 +1302,9 @@ class FloatVocabApp:
         ttk.Button(plan_actions, text="删除", style="Quiet.TButton", command=self.delete_selected_lexicon).pack(side="left", padx=(10, 0))
         ttk.Button(plan_actions, text="补全缺失例句", style="Quiet.TButton", command=self.enrich_examples).pack(side="left", padx=(10, 0))
 
-        style_box = self.create_panel(dashboard_tab, "悬浮窗样式", "调整透明度、字号和背景，让桌面复习卡片更顺眼。")
-        style_box.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
+        style_box = self.create_panel(dashboard_tab, "阅读外观", "调整透明度、字号和背景，让桌面复习卡片更顺眼。")
+        self.style_box_title_label = style_box.title_label
+        style_box.grid(row=2, column=1, sticky="nsew", padx=(10, 0))
         style_snapshot = ttk.Frame(style_box, style="Panel.TFrame")
         style_snapshot.pack(fill="x", pady=(0, 14))
         self.style_snapshot_value_labels: list[ttk.Label] = []
@@ -1324,13 +1340,21 @@ class FloatVocabApp:
         style_actions = ttk.Frame(style_box, style="Panel.TFrame")
         style_actions.pack(fill="x", pady=(16, 0))
         ttk.Button(style_actions, text="选择颜色", style="Quiet.TButton", command=self.choose_color).pack(side="left")
-        ttk.Label(style_actions, text="调整后会自动同步到悬浮窗。", style="Muted.TLabel").pack(side="left", padx=(12, 0))
+        self.float_style_hint_label = ttk.Label(
+            style_actions,
+            text="悬浮窗会自动同步这些设置。",
+            style="Muted.TLabel",
+        )
+        self.float_style_hint_label.pack(side="left", padx=(12, 0))
         ttk.Label(style_box, text="全局快捷键：Alt+Space 翻面，Alt+Left 不认识，Alt+Right 认识", style="Muted.TLabel", wraplength=420, justify="left").pack(anchor="w", pady=(12, 0))
         for variable in [self.alpha_var, self.font_size_var, self.bg_color_var, self.widget_size_var]:
             variable.trace_add("write", self.schedule_float_style_save)
 
-        stats_box = self.create_panel(dashboard_tab, "任务统计", "今天的复习完成度和最近 30 天的节奏集中显示在这里。")
-        stats_box.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        stats_box = self.create_panel(dashboard_tab, "学习状态", "今天的复习完成度和最近 30 天的节奏集中显示在这里。")
+        self.stats_box_title_label = stats_box.title_label
+        stats_box.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        self.stats_summary_label = ttk.Label(stats_box, text="最近 30 天的学习节奏会和今天的完成度一起展示。", style="Muted.TLabel")
+        self.stats_summary_label.pack(anchor="w", pady=(4, 10))
         stats_header = ttk.Frame(stats_box, style="Panel.TFrame")
         stats_header.pack(fill="x")
         stats_header.columnconfigure(0, weight=2)

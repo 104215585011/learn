@@ -14,6 +14,7 @@ This project already ships as a desktop GUI via `tkinter`.
    `pip install -r requirements-build.txt`
 2. Build the app bundle:
    `python build_exe.py`
+   This now packages `launch.pyw`, so the desktop app starts without an extra console window.
 3. Compile the installer with Inno Setup:
    open `installer/FloatVocab.iss`
 
@@ -26,3 +27,4 @@ This project already ships as a desktop GUI via `tkinter`.
 
 - Put an icon at `assets/floatvocab.ico` to include it automatically during PyInstaller builds.
 - If you change the app version, update `AppVersion` in `installer/FloatVocab.iss`.
+- Use `python app.py` for local debugging with a visible console, or `pythonw launch.pyw` for a local windowless launch.

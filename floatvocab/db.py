@@ -27,6 +27,7 @@ def initialize_database(
     news_digest.ensure_schema(conn)
     _seed_builtin_lexicon(conn, builtin_lexicon)
     _seed_exam_lexicons(conn, vocab_source_dir, exam_lexicons, qwerty_item_to_word)
+    _seed_multilingual_lexicons(conn, vocab_source_dir)
 
 
 def _init_schema(conn: sqlite3.Connection) -> None:
@@ -218,6 +219,54 @@ def _seed_exam_lexicons(
                 """,
                 (lexicon_id, row["word"], row["phonetic"], row["meaning"], row["example"], today),
             )
+    conn.commit()
+
+
+def _seed_multilingual_lexicons(conn: sqlite3.Connection, vocab_source_dir: Path) -> None:
+    if not vocab_source_dir.exists():
+        return
+    today = date.today().isoformat()
+    for language_dir in vocab_source_dir.iterdir():
+        if not language_dir.is_dir():
+            continue
+        language_code = language_dir.name.strip().lower()
+        for source_path in sorted(language_dir.glob("*.json")):
+            with source_path.open("r", encoding="utf-8") as file:
+                rows = json.load(file)
+            if not isinstance(rows, list) or not rows:
+                continue
+            explicit_language_code = next(
+                (str(row.get("language_code", "")).strip().lower() for row in rows if isinstance(row, dict) and str(row.get("language_code", "")).strip()),
+                "",
+            )
+            next_language_code = explicit_language_code or language_code or DEFAULT_LANGUAGE_CODE
+            lexicon_name = next(
+                (str(row.get("lexicon_name", "")).strip() for row in rows if isinstance(row, dict) and str(row.get("lexicon_name", "")).strip()),
+                source_path.stem,
+            )
+            lexicon_id = _create_lexicon(conn, lexicon_name, "built-in", next_language_code)
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                word = str(row.get("word") or "").strip()
+                meaning = str(row.get("meaning") or "").strip()
+                if not word or not meaning:
+                    continue
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO words
+                    (lexicon_id, word, phonetic, meaning, example, next_review_date)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        lexicon_id,
+                        word,
+                        str(row.get("phonetic") or "").strip(),
+                        meaning,
+                        str(row.get("example") or "").strip(),
+                        today,
+                    ),
+                )
     conn.commit()
 
 
