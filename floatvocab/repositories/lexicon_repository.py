@@ -100,9 +100,15 @@ class LexiconRepository:
             meaning = (row.get("meaning") or "").strip()
             if not word or not meaning:
                 continue
-            cursor = self.conn.execute(
+            exists = self.conn.execute(
+                "SELECT 1 FROM words WHERE lexicon_id = ? AND word = ?",
+                (lexicon_id, word),
+            ).fetchone()
+            if exists:
+                continue
+            self.conn.execute(
                 """
-                INSERT OR IGNORE INTO words
+                INSERT INTO words
                 (lexicon_id, word, phonetic, meaning, example, next_review_date)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
@@ -115,7 +121,7 @@ class LexiconRepository:
                     today,
                 ),
             )
-            imported += int(cursor.rowcount or 0)
+            imported += 1
         self.conn.commit()
         return imported
 

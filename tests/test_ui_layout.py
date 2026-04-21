@@ -677,6 +677,154 @@ class AppLayoutTests(unittest.TestCase):
         finally:
             ui.close()
 
+    def test_floating_window_exposes_pronunciation_button_for_current_word(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/əˈbændən/",
+                meaning="放弃",
+                example="He decided to abandon the plan.",
+                status="new",
+                lexicon_name="test",
+            )
+            with mock.patch.object(ui.float_window, "play_pronunciation") as play_pronunciation:
+                ui.float_window.pronunciation_button.invoke()
+
+            play_pronunciation.assert_called_once_with()
+        finally:
+            ui.close()
+
+    def test_floating_window_places_pronunciation_button_next_to_word(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/əˈbændən/",
+                meaning="放弃",
+                example="He decided to abandon the plan.",
+                status="new",
+                lexicon_name="test",
+            )
+            ui.float_window.apply_style()
+            ui.float_window.render()
+            ui.float_window.deiconify()
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            label_font = tkfont.Font(font=ui.float_window.word_label.cget("font"))
+            text_width = label_font.measure(ui.float_window.word_label.cget("text"))
+            text_right = (
+                ui.float_window.word_label.winfo_rootx()
+                + (ui.float_window.word_label.winfo_width() + text_width) // 2
+            )
+            gap = ui.float_window.pronunciation_button.winfo_rootx() - text_right
+            self.assertLessEqual(gap, 16)
+        finally:
+            ui.close()
+
+    def test_floating_window_play_pronunciation_does_nothing_without_real_audio(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/əˈbændən/",
+                meaning="放弃",
+                example="He decided to abandon the plan.",
+                status="new",
+                lexicon_name="test",
+            )
+            with mock.patch.object(app.threading, "Thread") as thread_cls:
+                with mock.patch.object(ui.float_window, "resolve_pronunciation_audio_url", return_value=None):
+                    ui.float_window.play_pronunciation()
+
+            thread_cls.assert_not_called()
+        finally:
+            ui.close()
+
+    def test_floating_window_prefers_word_audio_source_when_available(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/əˈbændən/",
+                meaning="放弃",
+                example="He decided to abandon the plan.",
+                status="new",
+                lexicon_name="test",
+            )
+            with mock.patch.object(ui.float_window, "resolve_pronunciation_audio_url", return_value="https://example.com/abandon.mp3"):
+                with mock.patch.object(app.threading, "Thread") as thread_cls:
+                    ui.float_window.play_pronunciation()
+
+            thread_cls.assert_called_once_with(
+                target=ui.float_window._play_audio_url,
+                args=("https://example.com/abandon.mp3",),
+                daemon=True,
+            )
+            thread_cls.return_value.start.assert_called_once_with()
+        finally:
+            ui.close()
+
+    def test_extract_pronunciation_audio_url_returns_first_non_empty_audio(self):
+        payload = [
+            {
+                "phonetics": [
+                    {"text": "/əˈbændən/", "audio": ""},
+                    {"text": "/əˈbændən/", "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/abandon-us.mp3"},
+                ]
+            }
+        ]
+
+        self.assertEqual(
+            app.extract_pronunciation_audio_url(payload),
+            "https://api.dictionaryapi.dev/media/pronunciations/en/abandon-us.mp3",
+        )
+
+    def test_floating_window_disables_pronunciation_button_without_real_audio(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/əˈbændən/",
+                meaning="放弃",
+                example="He decided to abandon the plan.",
+                status="new",
+                lexicon_name="test",
+            )
+            with mock.patch.object(ui.float_window, "resolve_pronunciation_audio_url", return_value=None):
+                ui.float_window.apply_style()
+                ui.float_window.render()
+
+            self.assertEqual(str(ui.float_window.pronunciation_button.cget("state")), "disabled")
+        finally:
+            ui.close()
+
+    def test_floating_window_enables_pronunciation_button_with_real_audio(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.float_window.card = app.WordCard(
+                id=1,
+                word="abandon",
+                phonetic="/əˈbændən/",
+                meaning="放弃",
+                example="He decided to abandon the plan.",
+                status="new",
+                lexicon_name="test",
+            )
+            with mock.patch.object(ui.float_window, "resolve_pronunciation_audio_url", return_value="https://example.com/abandon.mp3"):
+                ui.float_window.apply_style()
+                ui.float_window.render()
+
+            self.assertEqual(str(ui.float_window.pronunciation_button.cget("state")), "normal")
+        finally:
+            ui.close()
+
     def test_floating_window_uses_smaller_title_font_for_long_meaning_when_flipped(self):
         ui = app.FloatVocabApp()
         try:

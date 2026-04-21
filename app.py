@@ -6,6 +6,7 @@ import os
 import queue
 import shutil
 import sqlite3
+import subprocess
 import sys
 import threading
 import tkinter as tk
@@ -19,7 +20,7 @@ from floatvocab.repositories import LexiconRepository, NewsRepository, PlanRepos
 from floatvocab.services import EnrichmentService as _BaseEnrichmentService
 from floatvocab.services import NewsService, SettingsService, StudyService
 import news_digest
-from example_pipeline import enrich_database
+from example_pipeline import enrich_database, fetch_dictionary_payload
 
 
 APP_NAME = "FloatVocab"
@@ -67,6 +68,31 @@ THEME = {
     "heat_2": "#8FC2FF",
     "heat_3": "#3B90F7",
 }
+
+
+def extract_pronunciation_audio_url(payload) -> str | None:
+    for entry in payload or []:
+        phonetics = entry.get("phonetics")
+        if not isinstance(phonetics, list):
+            continue
+        for item in phonetics:
+            if not isinstance(item, dict):
+                continue
+            audio = str(item.get("audio") or "").strip()
+            if audio:
+                return audio
+    return None
+
+
+def resolve_pronunciation_audio_url(word: str, refresh: bool = False) -> str | None:
+    normalized_word = str(word or "").strip()
+    if not normalized_word:
+        return None
+    try:
+        payload = fetch_dictionary_payload(normalized_word, refresh=refresh)
+    except Exception:  # noqa: BLE001
+        return None
+    return extract_pronunciation_audio_url(payload)
 
 
 def get_user_data_dir(app_name: str = APP_NAME, env: dict[str, str] | None = None, home: Path | None = None) -> Path:
@@ -363,8 +389,24 @@ class FloatingWindow(tk.Toplevel):
         self.content_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
         self.content_frame.columnconfigure(0, weight=1)
         self.content_frame.rowconfigure(0, weight=1, minsize=40)
-        self.word_label = tk.Label(self.content_frame, text="", font=("Segoe UI", 28, "bold"), wraplength=320, justify="center")
-        self.word_label.grid(row=0, column=0, sticky="nsew")
+        self.word_row = tk.Frame(self.content_frame, bd=0, relief="flat")
+        self.word_row.grid(row=0, column=0, sticky="nsew")
+        self.word_row.columnconfigure(0, weight=1)
+        self.word_group = tk.Frame(self.word_row, bd=0, relief="flat")
+        self.word_group.grid(row=0, column=0)
+        self.word_label = tk.Label(self.word_group, text="", font=("Segoe UI", 28, "bold"), wraplength=320, justify="center")
+        self.word_label.pack(side="left")
+        self.pronunciation_button = tk.Button(
+            self.word_group,
+            text="🔊",
+            command=lambda: self.play_pronunciation(),
+            width=2,
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            takefocus=0,
+        )
+        self.pronunciation_button.pack(side="left", padx=(8, 0))
         self.detail_label = tk.Label(self.content_frame, text="", wraplength=320, justify="center", anchor="n")
         self.detail_label.grid(row=1, column=0, sticky="ew", pady=(6, 0))
 
@@ -393,7 +435,19 @@ class FloatingWindow(tk.Toplevel):
         self.bind("<Escape>", lambda _event: self.withdraw())
         self.bind("<Configure>", self.on_configure)
         self.protocol("WM_DELETE_WINDOW", self.withdraw)
-        for widget in [self.panel_frame, self.header_frame, self.card_header, self.card_subtitle, self.content_frame, self.word_label, self.detail_label, self.drag_bar, self.hint_label]:
+        for widget in [
+            self.panel_frame,
+            self.header_frame,
+            self.card_header,
+            self.card_subtitle,
+            self.content_frame,
+            self.word_row,
+            self.word_group,
+            self.word_label,
+            self.detail_label,
+            self.drag_bar,
+            self.hint_label,
+        ]:
             widget.bind("<ButtonPress-1>", self.start_move)
             widget.bind("<B1-Motion>", self.move)
         self.resize_grip.bind("<ButtonPress-1>", self.start_resize)
@@ -438,7 +492,7 @@ class FloatingWindow(tk.Toplevel):
             self.geometry(self.widget_geometry(width, height))
         self.configure(bg=bg)
         self.panel_frame.configure(bg=bg, padx=28, pady=24)
-        for widget in [self.header_frame, self.content_frame, self.action_frame]:
+        for widget in [self.header_frame, self.content_frame, self.action_frame, self.word_row, self.word_group]:
             widget.configure(bg=bg)
         self.drag_bar.configure(bg=THEME["panel_alt"], height=8)
         self.card_header.configure(bg=bg, fg=THEME["muted"], font=("Segoe UI", 11, "bold"), text=self.build_header_text())
@@ -476,6 +530,15 @@ class FloatingWindow(tk.Toplevel):
             bd=0,
             padx=16,
             pady=8,
+        )
+        self.pronunciation_button.configure(
+            bg=surface_bg,
+            fg=THEME["muted"],
+            activebackground=THEME["panel_alt"],
+            activeforeground=THEME["accent_active"],
+            font=("Segoe UI Symbol", max(11, detail_font_size)),
+            padx=2,
+            pady=0,
         )
         self.update_wraplength(wraplength)
         self.word_label.configure(font=("Segoe UI", word_font_size, "bold"))
@@ -550,9 +613,12 @@ class FloatingWindow(tk.Toplevel):
         self.card_header.configure(text=self.build_header_text())
         self.card_subtitle.configure(text=self.build_header_subtitle())
         if not self.card:
+            self.pronunciation_button.configure(state="disabled")
             self.word_label.configure(text="今天没有待复习单词")
             self.detail_label.configure(text="可以回到主界面导入词库，或者明天再来继续学习。")
             return
+        has_audio = bool(self.resolve_pronunciation_audio_url(self.card.word.strip()))
+        self.pronunciation_button.configure(state="normal" if has_audio else "disabled")
         if self.flipped:
             if self.should_use_compact_flipped_layout():
                 self.word_label.configure(font=("Segoe UI", self.word_font_size, "bold"))
@@ -607,6 +673,46 @@ class FloatingWindow(tk.Toplevel):
         self.flipped = not self.flipped
         self.render()
 
+    def play_pronunciation(self):
+        if not self.card or not self.card.word.strip():
+            return
+        word = self.card.word.strip()
+        audio_url = self.resolve_pronunciation_audio_url(word)
+        if not audio_url:
+            return
+        threading.Thread(target=self._play_audio_url, args=(audio_url,), daemon=True).start()
+
+    def resolve_pronunciation_audio_url(self, word: str) -> str | None:
+        return resolve_pronunciation_audio_url(word)
+
+    def _play_audio_url(self, audio_url: str):
+        if not audio_url:
+            return
+        if sys.platform.startswith("win"):
+            escaped_audio_url = audio_url.replace("'", "''")
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+            subprocess.Popen(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    (
+                        "$player = New-Object -ComObject WMPlayer.OCX.7; "
+                        f"$player.URL = '{escaped_audio_url}'; "
+                        "$player.controls.play(); "
+                        "$deadline = (Get-Date).AddSeconds(10); "
+                        "while ($player.playState -ne 1 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }; "
+                        "$player.close()"
+                    ),
+                ],
+                startupinfo=startupinfo,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            return
+        self.bell()
     def mark_known(self):
         if self.card:
             self.app.study_service.submit_review(self.card.id, 4)
