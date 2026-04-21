@@ -9,6 +9,16 @@ from uuid import uuid4
 import app
 
 
+class TrackingConnection(sqlite3.Connection):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+        return super().close()
+
+
 class ServiceBoundaryTests(unittest.TestCase):
     def setUp(self):
         ignored_temp_root = Path(app.APP_ROOT) / ".worktrees"
@@ -185,6 +195,76 @@ class ServiceBoundaryTests(unittest.TestCase):
         self.assertIs(conn_arg, sentinel_conn)
         self.assertEqual(article_id_arg, 9)
         self.assertEqual(delete_mock.call_args.kwargs["language_code"], "ja")
+
+    def test_news_service_refresh_latest_briefs_uses_current_language_code_when_not_provided(self):
+        created_connections = []
+        requested_paths = []
+
+        def connection_factory(path):
+            requested_paths.append(path)
+            conn = sqlite3.connect(path, factory=TrackingConnection)
+            conn.row_factory = sqlite3.Row
+            created_connections.append(conn)
+            return conn
+
+        self.db.plan_repository.save_plan(
+            lexicon_id=1,
+            daily_new=20,
+            target_date=(date.today() + timedelta(days=30)).isoformat(),
+            alpha=0.88,
+            font_size=26,
+            bg_color="#FFFFFF",
+            widget_size="medium",
+            current_language_code="fr",
+        )
+
+        with mock.patch.object(app.news_digest, "refresh_latest_briefs", return_value=[]) as refresh_mock:
+            service = app.NewsService(self.db_path, connection_factory=connection_factory)
+            result = service.refresh_latest_briefs(limit=5)
+
+        self.assertEqual(result, [])
+        self.assertEqual(requested_paths, [self.db_path, self.db_path])
+        self.assertEqual(len(created_connections), 2)
+        self.assertTrue(all(conn.closed for conn in created_connections))
+        refresh_mock.assert_called_once()
+        self.assertIs(refresh_mock.call_args.args[0], created_connections[0])
+        self.assertEqual(refresh_mock.call_args.kwargs["limit"], 5)
+        self.assertEqual(refresh_mock.call_args.kwargs["language_code"], "fr")
+
+    def test_news_service_save_brief_to_favorites_closes_non_context_connections(self):
+        created_connections = []
+        requested_paths = []
+
+        def connection_factory(path):
+            requested_paths.append(path)
+            conn = sqlite3.connect(path, factory=TrackingConnection)
+            conn.row_factory = sqlite3.Row
+            created_connections.append(conn)
+            return conn
+
+        self.db.plan_repository.save_plan(
+            lexicon_id=1,
+            daily_new=20,
+            target_date=(date.today() + timedelta(days=30)).isoformat(),
+            alpha=0.88,
+            font_size=26,
+            bg_color="#FFFFFF",
+            widget_size="medium",
+            current_language_code="fr",
+        )
+
+        with mock.patch.object(app.news_digest, "save_brief_to_favorites", return_value={"saved": True}) as save_mock:
+            service = app.NewsService(self.db_path, connection_factory=connection_factory)
+            result = service.save_brief_to_favorites(brief_id=1)
+
+        self.assertEqual(result, {"saved": True})
+        self.assertEqual(requested_paths, [self.db_path, self.db_path])
+        self.assertEqual(len(created_connections), 2)
+        self.assertTrue(all(conn.closed for conn in created_connections))
+        save_mock.assert_called_once()
+        self.assertIs(save_mock.call_args.args[0], created_connections[0])
+        self.assertEqual(save_mock.call_args.args[1], 1)
+        self.assertEqual(save_mock.call_args.kwargs["language_code"], "fr")
 
     def test_enrichment_service_enrich_examples_forwards_result_shape(self):
         service = app.EnrichmentService(self.db_path)
