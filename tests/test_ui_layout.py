@@ -6,6 +6,7 @@ import unittest
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import app
@@ -523,6 +524,52 @@ class AppLayoutTests(unittest.TestCase):
         finally:
             ui.close()
 
+    def test_dashboard_stacks_plan_and_style_panels_in_single_column_flow(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            plan_grid = ui.plan_box_frame.grid_info()
+            style_grid = ui.style_box_frame.grid_info()
+            stats_grid = ui.stats_box_frame.grid_info()
+
+            self.assertEqual(int(plan_grid["column"]), 0)
+            self.assertEqual(int(style_grid["column"]), 0)
+            self.assertEqual(int(style_grid["row"]), int(plan_grid["row"]) + 1)
+            self.assertEqual(int(stats_grid["row"]), int(style_grid["row"]) + 1)
+        finally:
+            ui.close()
+
+    def test_plan_form_uses_single_column_inputs_to_reduce_visual_crowding(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            self.assertEqual(int(ui.language_combo.grid_info()["column"]), 0)
+            self.assertEqual(int(ui.lexicon_combo.grid_info()["column"]), 0)
+            self.assertGreater(int(ui.lexicon_combo.grid_info()["row"]), int(ui.language_combo.grid_info()["row"]))
+            self.assertEqual(int(ui.daily_new_spinbox.grid_info()["column"]), 0)
+        finally:
+            ui.close()
+
+    def test_dashboard_provides_vertical_scroll_when_content_exceeds_viewport(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.root.geometry("1080x760")
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            scrollregion = ui.dashboard_canvas.cget("scrollregion").split()
+            self.assertTrue(hasattr(ui, "dashboard_canvas"))
+            self.assertTrue(hasattr(ui, "dashboard_scrollbar"))
+            self.assertEqual(str(ui.dashboard_scrollbar.cget("orient")), "vertical")
+            self.assertEqual(len(scrollregion), 4)
+            self.assertGreater(int(float(scrollregion[3])), ui.dashboard_canvas.winfo_height())
+        finally:
+            ui.close()
+
     def test_main_window_exposes_bottom_content_tabs(self):
         ui = app.FloatVocabApp()
         try:
@@ -660,6 +707,28 @@ class AppLayoutTests(unittest.TestCase):
             self.assertTrue(ui.float_window.action_frame.winfo_ismapped())
             self.assertTrue(ui.float_window.hint_label.winfo_ismapped())
             self.assertTrue(ui.float_window.drag_bar.winfo_ismapped())
+        finally:
+            ui.close()
+
+    def test_floating_window_resize_keeps_small_card_above_readable_minimum_height(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.db.save_float_style(0.88, 32, "#F7FAF5", "small")
+            ui.float_window.apply_style()
+            ui.float_window.deiconify()
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            ui.float_window.resize_start_x = 0
+            ui.float_window.resize_start_y = 0
+            ui.float_window.resize_start_width = 300
+            ui.float_window.resize_start_height = 210
+            ui.float_window.resize(SimpleNamespace(x_root=-120, y_root=-120))
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            self.assertGreaterEqual(ui.float_window.winfo_width(), 300)
+            self.assertGreaterEqual(ui.float_window.winfo_height(), 210)
         finally:
             ui.close()
 

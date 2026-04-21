@@ -23,6 +23,10 @@ class NewsService:
     @contextmanager
     def _open_connection(self):
         resource = self.connection_factory(self.db_path)
+        if isinstance(resource, sqlite3.Connection):
+            with closing(resource) as conn:
+                yield conn
+            return
         if hasattr(resource, "__enter__") and hasattr(resource, "__exit__"):
             with resource as conn:
                 yield conn
