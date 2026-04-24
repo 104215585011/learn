@@ -493,10 +493,11 @@ class AppLayoutTests(unittest.TestCase):
 
             self.assertEqual(ui.hero_title_label.cget("text"), "FloatVocab")
             self.assertIn("安静", ui.hero_body_label.cget("text"))
-            self.assertEqual(ui.workbench_title_label.cget("text"), "今日学习")
-            self.assertEqual(ui.plan_box_title_label.cget("text"), "学习设置")
+            self.assertFalse(hasattr(ui, "hero_summary_label"))
+            self.assertFalse(hasattr(ui, "hero_intro_label"))
             self.assertEqual(ui.style_box_title_label.cget("text"), "阅读外观")
             self.assertEqual(ui.stats_box_title_label.cget("text"), "学习状态")
+            self.assertFalse(hasattr(ui, "hero_badge_value_labels"))
 
             tab_labels = [ui.content_notebook.tab(tab_id, "text") for tab_id in ui.content_notebook.tabs()]
             self.assertEqual(tab_labels[0], "工作台")
@@ -517,14 +518,12 @@ class AppLayoutTests(unittest.TestCase):
             ui.root.update_idletasks()
             ui.root.update()
 
-            self.assertEqual(ui.workbench_title_label.cget("text"), "今日学习")
-            self.assertIn("词库", ui.lexicon_state_label.cget("text"))
             self.assertIn("悬浮窗会自动同步", ui.float_style_hint_label.cget("text"))
             self.assertIn("最近 30 天", ui.stats_summary_label.cget("text"))
         finally:
             ui.close()
 
-    def test_dashboard_stacks_plan_and_style_panels_in_single_column_flow(self):
+    def test_dashboard_keeps_compact_plan_controls_without_today_route(self):
         ui = app.FloatVocabApp()
         try:
             ui.root.update_idletasks()
@@ -534,39 +533,47 @@ class AppLayoutTests(unittest.TestCase):
             style_grid = ui.style_box_frame.grid_info()
             stats_grid = ui.stats_box_frame.grid_info()
 
+            self.assertFalse(hasattr(ui, "workbench_title_label"))
+            self.assertFalse(hasattr(ui, "dashboard_focus_title_labels"))
+            self.assertFalse(hasattr(ui, "metric_strip"))
+            self.assertFalse(hasattr(ui, "stats_spotlight_value_labels"))
+            self.assertTrue(hasattr(ui, "language_combo"))
+            self.assertTrue(hasattr(ui, "lexicon_combo"))
+            self.assertTrue(hasattr(ui, "daily_new_spinbox"))
             self.assertEqual(int(plan_grid["column"]), 0)
-            self.assertEqual(int(style_grid["column"]), 0)
-            self.assertEqual(int(style_grid["row"]), int(plan_grid["row"]) + 1)
-            self.assertEqual(int(stats_grid["row"]), int(style_grid["row"]) + 1)
+            self.assertEqual(int(plan_grid["row"]), 0)
+            self.assertEqual(int(style_grid["column"]), 1)
+            self.assertEqual(int(style_grid["row"]), 0)
+            self.assertEqual(int(stats_grid["column"]), 0)
+            self.assertEqual(int(stats_grid["row"]), 1)
+            self.assertEqual(int(stats_grid["columnspan"]), 2)
         finally:
             ui.close()
 
-    def test_plan_form_uses_single_column_inputs_to_reduce_visual_crowding(self):
-        ui = app.FloatVocabApp()
-        try:
-            ui.root.update_idletasks()
-            ui.root.update()
-
-            self.assertEqual(int(ui.language_combo.grid_info()["column"]), 0)
-            self.assertEqual(int(ui.lexicon_combo.grid_info()["column"]), 0)
-            self.assertGreater(int(ui.lexicon_combo.grid_info()["row"]), int(ui.language_combo.grid_info()["row"]))
-            self.assertEqual(int(ui.daily_new_spinbox.grid_info()["column"]), 0)
-        finally:
-            ui.close()
-
-    def test_dashboard_provides_vertical_scroll_when_content_exceeds_viewport(self):
+    def test_dashboard_fits_primary_controls_without_vertical_scrollbar(self):
         ui = app.FloatVocabApp()
         try:
             ui.root.geometry("1080x760")
             ui.root.update_idletasks()
             ui.root.update()
 
-            scrollregion = ui.dashboard_canvas.cget("scrollregion").split()
-            self.assertTrue(hasattr(ui, "dashboard_canvas"))
-            self.assertTrue(hasattr(ui, "dashboard_scrollbar"))
-            self.assertEqual(str(ui.dashboard_scrollbar.cget("orient")), "vertical")
-            self.assertEqual(len(scrollregion), 4)
-            self.assertGreater(int(float(scrollregion[3])), ui.dashboard_canvas.winfo_height())
+            self.assertFalse(hasattr(ui, "dashboard_canvas"))
+            self.assertFalse(hasattr(ui, "dashboard_scrollbar"))
+            self.assertLessEqual(ui.style_box_frame.winfo_height(), ui.content_notebook.winfo_height())
+            self.assertLessEqual(ui.stats_box_frame.winfo_height(), ui.content_notebook.winfo_height())
+        finally:
+            ui.close()
+
+    def test_dashboard_uses_compact_panel_spacing(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.root.update_idletasks()
+            ui.root.update()
+
+            self.assertLessEqual(max(map(int, ui.plan_box_frame.cget("padding"))), 14)
+            self.assertLessEqual(max(map(int, ui.style_box_frame.cget("padding"))), 14)
+            self.assertLessEqual(max(map(int, ui.stats_box_frame.cget("padding"))), 14)
+            self.assertLess(ui.content_notebook.grid_info()["pady"][0], 14)
         finally:
             ui.close()
 
@@ -577,7 +584,6 @@ class AppLayoutTests(unittest.TestCase):
             ui.root.update()
 
             self.assertTrue(hasattr(ui, "content_notebook"))
-            self.assertTrue(hasattr(ui, "language_combo"))
             self.assertGreater(ui.content_notebook.winfo_height(), 240)
 
             tab_labels = [ui.content_notebook.tab(tab_id, "text") for tab_id in ui.content_notebook.tabs()]
@@ -597,7 +603,7 @@ class AppLayoutTests(unittest.TestCase):
         finally:
             ui.close()
 
-    def test_switching_to_language_without_lexicons_disables_lexicon_selector(self):
+    def test_switching_to_language_without_lexicons_updates_hidden_language_state(self):
         temp_root = Path(app.APP_ROOT) / "tests" / "_tmp_ui_layout" / uuid.uuid4().hex
         temp_root.mkdir(parents=True, exist_ok=True)
         db_path = temp_root / "test.db"
@@ -614,8 +620,7 @@ class AppLayoutTests(unittest.TestCase):
                     ui.root.update()
 
                     self.assertEqual(ui.active_language_code(), "ja")
-                    self.assertEqual(str(ui.lexicon_combo.cget("state")), "disabled")
-                    self.assertIn("还没有词库", ui.lexicon_state_label.cget("text"))
+                    self.assertEqual(ui.lexicon_var.get(), "")
                 finally:
                     ui.close()
         finally:
@@ -671,6 +676,65 @@ class AppLayoutTests(unittest.TestCase):
                 try:
                     ui.refresh_words()
                     self.assertEqual(len(ui.words_tree.get_children()), 100)
+                finally:
+                    ui.close()
+        finally:
+            for _ in range(5):
+                try:
+                    shutil.rmtree(temp_root, ignore_errors=False)
+                    break
+                except PermissionError:
+                    time.sleep(0.1)
+            else:
+                shutil.rmtree(temp_root, ignore_errors=True)
+
+    def test_words_overview_search_filters_by_word_and_meaning(self):
+        temp_root = Path(app.APP_ROOT) / "tests" / "_tmp_ui_layout" / uuid.uuid4().hex
+        temp_root.mkdir(parents=True, exist_ok=True)
+        db_path = temp_root / "test.db"
+
+        try:
+            db = app.FloatVocabDB(db_path)
+            lexicon_id = db.create_lexicon("Search Word List", "test")
+            today = date.today().isoformat()
+            rows = [
+                ("abandon", "放弃"),
+                ("apple", "苹果"),
+                ("capacity", "容量"),
+            ]
+            for word, meaning in rows:
+                db.conn.execute(
+                    """
+                    INSERT INTO words
+                    (lexicon_id, word, phonetic, meaning, example, next_review_date)
+                    VALUES (?, ?, '', ?, '', ?)
+                    """,
+                    (lexicon_id, word, meaning, today),
+                )
+            plan = db.plan()
+            db.save_plan(
+                lexicon_id,
+                plan["daily_new"],
+                plan["target_date"] or (date.today() + timedelta(days=30)).isoformat(),
+                plan["float_alpha"],
+                plan["font_size"],
+                plan["bg_color"],
+                plan["widget_size"],
+            )
+            db.conn.close()
+
+            with mock.patch.object(app, "DB_PATH", db_path):
+                ui = app.FloatVocabApp()
+                try:
+                    ui.words_search_var.set("app")
+                    ui.refresh_words()
+                    english_matches = [ui.words_tree.item(item, "values")[0] for item in ui.words_tree.get_children()]
+                    self.assertEqual(english_matches, ["apple"])
+
+                    ui.words_search_var.set("放弃")
+                    ui.refresh_words()
+                    chinese_matches = [ui.words_tree.item(item, "values")[0] for item in ui.words_tree.get_children()]
+                    self.assertEqual(chinese_matches, ["abandon"])
                 finally:
                     ui.close()
         finally:

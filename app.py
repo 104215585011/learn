@@ -1038,21 +1038,13 @@ class FloatVocabApp:
         )
 
     def create_panel(self, parent, title: str, subtitle: str | None = None):
-        panel = ttk.Frame(parent, style="Panel.TFrame", padding=18)
+        panel = ttk.Frame(parent, style="Panel.TFrame", padding=12)
         panel.title_label = ttk.Label(panel, text=title, style="PanelTitle.TLabel")
         panel.title_label.pack(anchor="w")
         if subtitle:
-            ttk.Label(panel, text=subtitle, style="Muted.TLabel", wraplength=460, justify="left").pack(anchor="w", pady=(4, 14))
+            ttk.Label(panel, text=subtitle, style="Muted.TLabel", wraplength=460, justify="left").pack(anchor="w", pady=(3, 10))
         return panel
 
-    def bind_vertical_mousewheel(self, widget):
-        def _on_mousewheel(event):
-            if event.delta:
-                widget.yview_scroll(int(-event.delta / 120), "units")
-                return "break"
-            return None
-
-        widget.bind("<MouseWheel>", _on_mousewheel)
     def build_dashboard_summary_text(self) -> str:
         stats = self.study_service.get_study_stats()
         if not stats:
@@ -1214,10 +1206,6 @@ class FloatVocabApp:
             self.hero_summary_label.configure(text=self.build_dashboard_summary_text())
         if hasattr(self, "hero_intro_label"):
             self.hero_intro_label.configure(text=self.build_dashboard_intro_text())
-        badge_items = self.build_dashboard_badge_items()
-        for index, (_label_text, value_text) in enumerate(badge_items):
-            if index < len(getattr(self, "hero_badge_value_labels", [])):
-                self.hero_badge_value_labels[index].configure(text=value_text)
         step_items = self.build_dashboard_focus_steps()
         for index, (_step_no, title_text, body_text) in enumerate(step_items):
             if index < len(getattr(self, "dashboard_focus_title_labels", [])):
@@ -1295,178 +1283,76 @@ class FloatVocabApp:
     def build_ui(self):
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
-        shell = ttk.Frame(self.root, style="App.TFrame", padding=20)
+        shell = ttk.Frame(self.root, style="App.TFrame", padding=12)
         shell.grid(row=0, column=0, sticky="nsew")
         shell.columnconfigure(0, weight=1)
         shell.rowconfigure(1, weight=1)
 
-        hero = ttk.Frame(shell, style="Hero.TFrame", padding=22)
+        hero = ttk.Frame(shell, style="Hero.TFrame", padding=14)
         hero.grid(row=0, column=0, sticky="ew")
         hero.columnconfigure(0, weight=1)
         self.hero_title_label = ttk.Label(hero, text="FloatVocab", style="HeroTitle.TLabel")
         self.hero_title_label.grid(row=0, column=0, sticky="w")
-        self.hero_kicker_label = ttk.Label(
-            hero,
-            text="今日学习区",
-            style="HeroBody.TLabel",
-        )
-        self.hero_kicker_label.grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.hero_body_label = ttk.Label(
             hero,
             text="安静、克制的桌面学习空间，让今天的词汇计划和阅读内容更容易进入状态。",
             style="HeroBody.TLabel",
         )
-        self.hero_body_label.grid(row=2, column=0, sticky="w", pady=(4, 0))
-        self.hero_summary_label = ttk.Label(
-            hero,
-            text=self.build_dashboard_summary_text(),
-            style="PanelTitle.TLabel",
-        )
-        self.hero_summary_label.grid(row=3, column=0, sticky="w", pady=(10, 0))
-        self.hero_intro_label = ttk.Label(
-            hero,
-            text=self.build_dashboard_intro_text(),
-            style="HeroBody.TLabel",
-        )
-        self.hero_intro_label.grid(row=4, column=0, sticky="w", pady=(6, 0))
+        self.hero_body_label.grid(row=1, column=0, sticky="w", pady=(6, 0))
         hero_actions = ttk.Frame(hero, style="Hero.TFrame")
-        hero_actions.grid(row=0, column=1, rowspan=5, sticky="e")
+        hero_actions.grid(row=0, column=1, rowspan=2, sticky="e")
         ttk.Button(hero_actions, text="继续复习", style="Primary.TButton", command=self.float_window.show_next).pack(side="left", padx=(0, 10))
         ttk.Button(hero_actions, text="刷新日报", style="Secondary.TButton", command=self.refresh_daily_briefs).pack(side="left")
-        hero_badges = ttk.Frame(hero, style="Hero.TFrame")
-        hero_badges.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(16, 0))
-        self.hero_badge_value_labels: list[ttk.Label] = []
-        for index, (label_text, value_text) in enumerate(self.build_dashboard_badge_items()):
-            badge = ttk.Frame(hero_badges, style="Panel.TFrame", padding=(14, 12))
-            badge.grid(row=0, column=index, padx=(0, 12), sticky="w")
-            ttk.Label(badge, text=label_text, style="SectionLabel.TLabel").pack(anchor="w")
-            value_label = ttk.Label(badge, text=value_text, style="PanelTitle.TLabel")
-            value_label.pack(anchor="w", pady=(4, 0))
-            self.hero_badge_value_labels.append(value_label)
-
         self.content_notebook = ttk.Notebook(shell)
-        self.content_notebook.grid(row=1, column=0, sticky="nsew", pady=(18, 0))
+        self.content_notebook.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
 
-        dashboard_tab = ttk.Frame(self.content_notebook, style="App.TFrame", padding=0)
+        dashboard_tab = ttk.Frame(self.content_notebook, style="App.TFrame", padding=6)
         dashboard_tab.columnconfigure(0, weight=1)
-        dashboard_tab.rowconfigure(0, weight=1)
+        dashboard_tab.columnconfigure(1, weight=1)
         self.content_notebook.add(dashboard_tab, text="工作台")
 
-        self.dashboard_canvas = tk.Canvas(
-            dashboard_tab,
-            bg=THEME["bg"],
-            bd=0,
-            highlightthickness=0,
-            relief="flat",
-        )
-        self.dashboard_canvas.grid(row=0, column=0, sticky="nsew")
-        self.dashboard_scrollbar = ttk.Scrollbar(
-            dashboard_tab,
-            orient="vertical",
-            command=self.dashboard_canvas.yview,
-        )
-        self.dashboard_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.dashboard_canvas.configure(yscrollcommand=self.dashboard_scrollbar.set)
-
-        dashboard_content = ttk.Frame(self.dashboard_canvas, style="App.TFrame", padding=8)
-        dashboard_content.columnconfigure(0, weight=1)
-        dashboard_content.rowconfigure(4, weight=1)
-        self.dashboard_canvas_window = self.dashboard_canvas.create_window(
-            (0, 0),
-            window=dashboard_content,
-            anchor="nw",
-        )
-        dashboard_content.bind(
-            "<Configure>",
-            lambda _event: self.dashboard_canvas.configure(scrollregion=self.dashboard_canvas.bbox("all")),
-        )
-        self.dashboard_canvas.bind(
-            "<Configure>",
-            lambda event: self.dashboard_canvas.itemconfigure(self.dashboard_canvas_window, width=event.width),
-        )
-        self.bind_vertical_mousewheel(self.dashboard_canvas)
-
-        self.workbench_title_label = ttk.Label(dashboard_content, text="今日学习", style="WorkbenchTitle.TLabel")
-        self.workbench_title_label.grid(row=0, column=0, sticky="w", pady=(0, 14))
-
-        focus_box = self.create_panel(dashboard_content, "今日路线", "首页先告诉你今天怎么学，再去碰设置和样式。")
-        focus_box.grid(row=1, column=0, sticky="ew", pady=(0, 18))
-        focus_strip = ttk.Frame(focus_box, style="Panel.TFrame")
-        focus_strip.pack(fill="x")
-        self.dashboard_focus_title_labels: list[ttk.Label] = []
-        self.dashboard_focus_body_labels: list[ttk.Label] = []
-        for index, (step_no, title_text, body_text) in enumerate(self.build_dashboard_focus_steps()):
-            card = ttk.Frame(focus_strip, style="Panel.TFrame", padding=(16, 14))
-            card.grid(row=0, column=index, sticky="nsew", padx=(0, 12 if index < 2 else 0))
-            focus_strip.columnconfigure(index, weight=1)
-            ttk.Label(card, text=step_no, style="SectionLabel.TLabel").pack(anchor="w")
-            title_label = ttk.Label(card, text=title_text, style="PanelTitle.TLabel")
-            title_label.pack(anchor="w", pady=(8, 0))
-            body_label = ttk.Label(card, text=body_text, style="Muted.TLabel", wraplength=220, justify="left")
-            body_label.pack(anchor="w", pady=(6, 0))
-            self.dashboard_focus_title_labels.append(title_label)
-            self.dashboard_focus_body_labels.append(body_label)
-
-        plan_box = self.create_panel(dashboard_content, "学习设置", "先确定词库和每日目标，再进入今天的背词节奏。")
-        self.plan_box_title_label = plan_box.title_label
-        self.plan_box_frame = plan_box
-        plan_box.grid(row=2, column=0, sticky="ew", pady=(0, 18))
-        plan_snapshot = ttk.Frame(plan_box, style="Panel.TFrame")
-        plan_snapshot.pack(fill="x", pady=(0, 14))
-        self.plan_snapshot_value_labels: list[ttk.Label] = []
-        for index, (label_text, value_text) in enumerate(self.build_plan_snapshot_items()):
-            item = ttk.Frame(plan_snapshot, style="Hero.TFrame", padding=(14, 12))
-            item.grid(row=0, column=index, sticky="nsew", padx=(0, 10 if index < 2 else 0))
-            plan_snapshot.columnconfigure(index, weight=1)
-            ttk.Label(item, text=label_text, style="SectionLabel.TLabel").pack(anchor="w")
-            value_label = ttk.Label(item, text=value_text, style="PanelTitle.TLabel")
-            value_label.pack(anchor="w", pady=(4, 0))
-            self.plan_snapshot_value_labels.append(value_label)
         self.language_var = tk.StringVar()
         self.lexicon_var = tk.StringVar()
+        self.target_date_var = tk.StringVar()
+        self.daily_new_var = tk.IntVar(value=20)
+
+        plan_box = self.create_panel(dashboard_tab, "学习计划", "选择词库、调整节奏，然后继续复习。")
+        self.plan_box_title_label = plan_box.title_label
+        self.plan_box_frame = plan_box
+        plan_box.grid(row=0, column=0, sticky="new", padx=(0, 8), pady=(0, 8))
         plan_form = ttk.Frame(plan_box, style="Panel.TFrame")
         plan_form.pack(fill="x")
         plan_form.columnconfigure(0, weight=1)
-        ttk.Label(plan_form, text="学习语言", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
+        plan_form.columnconfigure(1, weight=1)
+        ttk.Label(plan_form, text="学习语言", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(plan_form, text="当前词库", style="SectionLabel.TLabel").grid(row=0, column=1, sticky="w", padx=(10, 0))
         self.language_combo = ttk.Combobox(plan_form, textvariable=self.language_var, state="readonly")
-        self.language_combo.grid(row=1, column=0, sticky="ew")
+        self.language_combo.grid(row=1, column=0, sticky="ew", pady=(6, 0), padx=(0, 5))
         self.language_combo.bind("<<ComboboxSelected>>", self.on_language_selected)
-        ttk.Label(plan_form, text="当前词库", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 6))
         self.lexicon_combo = ttk.Combobox(plan_form, textvariable=self.lexicon_var, state="readonly")
+        self.lexicon_combo.grid(row=1, column=1, sticky="ew", pady=(6, 0), padx=(5, 0))
         self.lexicon_combo.bind("<<ComboboxSelected>>", lambda _event: self.refresh_words())
-        self.lexicon_combo.grid(row=3, column=0, sticky="ew")
-        ttk.Label(plan_form, text="目标日期", style="SectionLabel.TLabel").grid(row=4, column=0, sticky="w", pady=(14, 6))
-        self.target_date_var = tk.StringVar()
-        ttk.Entry(plan_form, textvariable=self.target_date_var).grid(row=5, column=0, sticky="ew")
-        ttk.Label(plan_form, text="每日新词", style="SectionLabel.TLabel").grid(row=6, column=0, sticky="w", pady=(14, 6))
-        self.daily_new_var = tk.IntVar(value=20)
+        ttk.Label(plan_form, text="目标日期", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(plan_form, text="每日新词", style="SectionLabel.TLabel").grid(row=2, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+        ttk.Entry(plan_form, textvariable=self.target_date_var).grid(row=3, column=0, sticky="ew", pady=(6, 0), padx=(0, 5))
         self.daily_new_spinbox = ttk.Spinbox(plan_form, from_=1, to=300, textvariable=self.daily_new_var)
-        self.daily_new_spinbox.grid(row=7, column=0, sticky="ew")
-        ttk.Label(plan_form, text="状态", style="SectionLabel.TLabel").grid(row=8, column=0, sticky="w", pady=(14, 6))
-        self.lexicon_state_label = ttk.Label(plan_form, text="", style="Muted.TLabel", wraplength=240, justify="left")
-        self.lexicon_state_label.grid(row=9, column=0, sticky="w")
-        ttk.Label(plan_form, text="导入提示", style="SectionLabel.TLabel").grid(row=10, column=0, sticky="w", pady=(14, 6))
-        self.import_language_label = ttk.Label(plan_form, text="", style="Muted.TLabel", wraplength=240, justify="left")
-        self.import_language_label.grid(row=11, column=0, sticky="w")
-        self.example_status_label = ttk.Label(plan_form, text="", style="Muted.TLabel")
-        self.example_status_label.grid(row=12, column=0, sticky="w", pady=(12, 0))
+        self.daily_new_spinbox.grid(row=3, column=1, sticky="ew", pady=(6, 0), padx=(5, 0))
         plan_actions = ttk.Frame(plan_box, style="Panel.TFrame")
-        plan_actions.pack(fill="x", pady=(16, 0))
+        plan_actions.pack(fill="x", pady=(10, 0))
         ttk.Button(plan_actions, text="保存计划", style="Primary.TButton", command=self.save_plan).pack(side="left")
         ttk.Button(plan_actions, text="导入词库", style="Secondary.TButton", command=self.import_words).pack(side="left", padx=(10, 0))
-        ttk.Button(plan_actions, text="重命名", style="Quiet.TButton", command=self.edit_selected_lexicon).pack(side="left", padx=(18, 0))
-        ttk.Button(plan_actions, text="删除", style="Quiet.TButton", command=self.delete_selected_lexicon).pack(side="left", padx=(10, 0))
-        ttk.Button(plan_actions, text="补全缺失例句", style="Quiet.TButton", command=self.enrich_examples).pack(side="left", padx=(10, 0))
+        ttk.Button(plan_actions, text="重命名", style="Quiet.TButton", command=self.edit_selected_lexicon).pack(side="left", padx=(14, 0))
+        ttk.Button(plan_actions, text="删除", style="Quiet.TButton", command=self.delete_selected_lexicon).pack(side="left", padx=(8, 0))
 
-        style_box = self.create_panel(dashboard_content, "阅读外观", "调整透明度、字号和背景，让桌面复习卡片更顺眼。")
+        style_box = self.create_panel(dashboard_tab, "阅读外观", "调整透明度、字号和背景，让桌面复习卡片更顺眼。")
         self.style_box_title_label = style_box.title_label
         self.style_box_frame = style_box
-        style_box.grid(row=3, column=0, sticky="ew", pady=(0, 18))
+        style_box.grid(row=0, column=1, sticky="new", padx=(8, 0), pady=(0, 8))
         style_snapshot = ttk.Frame(style_box, style="Panel.TFrame")
-        style_snapshot.pack(fill="x", pady=(0, 14))
+        style_snapshot.pack(fill="x", pady=(0, 10))
         self.style_snapshot_value_labels: list[ttk.Label] = []
         for index, (label_text, value_text) in enumerate(self.build_style_snapshot_items()):
-            item = ttk.Frame(style_snapshot, style="Hero.TFrame", padding=(14, 12))
+            item = ttk.Frame(style_snapshot, style="Hero.TFrame", padding=(10, 8))
             item.grid(row=0, column=index, sticky="nsew", padx=(0, 10 if index < 2 else 0))
             style_snapshot.columnconfigure(index, weight=1)
             ttk.Label(item, text=label_text, style="SectionLabel.TLabel").pack(anchor="w")
@@ -1479,13 +1365,13 @@ class FloatVocabApp:
         ttk.Label(style_form, text="透明度", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w")
         self.alpha_var = tk.DoubleVar(value=0.88)
         ttk.Scale(style_form, from_=0.35, to=1.0, variable=self.alpha_var, orient="horizontal").grid(row=0, column=1, sticky="ew")
-        ttk.Label(style_form, text="字体大小", style="SectionLabel.TLabel").grid(row=1, column=0, sticky="w", pady=(14, 0))
+        ttk.Label(style_form, text="字体大小", style="SectionLabel.TLabel").grid(row=1, column=0, sticky="w", pady=(10, 0))
         self.font_size_var = tk.IntVar(value=26)
-        ttk.Spinbox(style_form, from_=16, to=56, textvariable=self.font_size_var).grid(row=1, column=1, sticky="ew", pady=(14, 0))
-        ttk.Label(style_form, text="背景颜色", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 0))
+        ttk.Spinbox(style_form, from_=16, to=56, textvariable=self.font_size_var).grid(row=1, column=1, sticky="ew", pady=(10, 0))
+        ttk.Label(style_form, text="背景颜色", style="SectionLabel.TLabel").grid(row=2, column=0, sticky="w", pady=(10, 0))
         self.bg_color_var = tk.StringVar(value="#F7FAF5")
-        ttk.Entry(style_form, textvariable=self.bg_color_var).grid(row=2, column=1, sticky="ew", pady=(14, 0))
-        ttk.Label(style_form, text="组件尺寸", style="SectionLabel.TLabel").grid(row=3, column=0, sticky="w", pady=(14, 0))
+        ttk.Entry(style_form, textvariable=self.bg_color_var).grid(row=2, column=1, sticky="ew", pady=(10, 0))
+        ttk.Label(style_form, text="组件尺寸", style="SectionLabel.TLabel").grid(row=3, column=0, sticky="w", pady=(10, 0))
         self.widget_size_var = tk.StringVar(value="medium")
         self.widget_size_combo = ttk.Combobox(
             style_form,
@@ -1493,9 +1379,9 @@ class FloatVocabApp:
             state="readonly",
             values=["small", "medium", "large"],
         )
-        self.widget_size_combo.grid(row=3, column=1, sticky="ew", pady=(14, 0))
+        self.widget_size_combo.grid(row=3, column=1, sticky="ew", pady=(10, 0))
         style_actions = ttk.Frame(style_box, style="Panel.TFrame")
-        style_actions.pack(fill="x", pady=(16, 0))
+        style_actions.pack(fill="x", pady=(10, 0))
         ttk.Button(style_actions, text="选择颜色", style="Quiet.TButton", command=self.choose_color).pack(side="left")
         self.float_style_hint_label = ttk.Label(
             style_actions,
@@ -1503,54 +1389,32 @@ class FloatVocabApp:
             style="Muted.TLabel",
         )
         self.float_style_hint_label.pack(side="left", padx=(12, 0))
-        ttk.Label(style_box, text="全局快捷键：Alt+Space 翻面，Alt+Left 不认识，Alt+Right 认识", style="Muted.TLabel", wraplength=420, justify="left").pack(anchor="w", pady=(12, 0))
+        ttk.Label(style_box, text="全局快捷键：Alt+Space 翻面，Alt+Left 不认识，Alt+Right 认识", style="Muted.TLabel", wraplength=420, justify="left").pack(anchor="w", pady=(8, 0))
         for variable in [self.alpha_var, self.font_size_var, self.bg_color_var, self.widget_size_var]:
             variable.trace_add("write", self.schedule_float_style_save)
 
-        stats_box = self.create_panel(dashboard_content, "学习状态", "今天的复习完成度和最近 30 天的节奏集中显示在这里。")
+        stats_box = self.create_panel(dashboard_tab, "学习状态", "今天的复习完成度和最近 30 天的节奏集中显示在这里。")
         self.stats_box_title_label = stats_box.title_label
         self.stats_box_frame = stats_box
-        stats_box.grid(row=4, column=0, sticky="nsew")
+        stats_box.grid(row=1, column=0, columnspan=2, sticky="new", pady=(8, 0))
         self.stats_summary_label = ttk.Label(stats_box, text="最近 30 天的学习节奏会和今天的完成度一起展示。", style="Muted.TLabel")
-        self.stats_summary_label.pack(anchor="w", pady=(4, 10))
+        self.stats_summary_label.pack(anchor="w", pady=(3, 6))
         stats_header = ttk.Frame(stats_box, style="Panel.TFrame")
         stats_header.pack(fill="x")
-        stats_header.columnconfigure(0, weight=2)
-        stats_header.columnconfigure(1, weight=3)
-        stats_lead = ttk.Frame(stats_header, style="Hero.TFrame", padding=(18, 16))
-        stats_lead.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        stats_header.columnconfigure(0, weight=1)
+        stats_lead = ttk.Frame(stats_header, style="Hero.TFrame", padding=(12, 10))
+        stats_lead.grid(row=0, column=0, sticky="nsew")
         ttk.Label(stats_lead, text="今日进度", style="SectionLabel.TLabel").pack(anchor="w")
-        self.progress_label = ttk.Label(stats_lead, text="", style="Summary.TLabel", wraplength=320, justify="left")
-        self.progress_label.pack(anchor="w", pady=(8, 0))
-        self.heatmap_caption_label = ttk.Label(stats_lead, text="", style="Muted.TLabel", wraplength=320, justify="left")
-        self.heatmap_caption_label.pack(anchor="w", pady=(8, 0))
-        stats_spotlight = ttk.Frame(stats_header, style="Panel.TFrame")
-        stats_spotlight.grid(row=0, column=1, sticky="nsew")
-        self.stats_spotlight_value_labels: list[ttk.Label] = []
-        for index, (label_text, value_text) in enumerate(self.build_stats_spotlight_items(None)):
-            card = ttk.Frame(stats_spotlight, style="Panel.TFrame", padding=(14, 12))
-            card.grid(row=0, column=index, sticky="nsew", padx=(0, 10 if index < 2 else 0))
-            stats_spotlight.columnconfigure(index, weight=1)
-            ttk.Label(card, text=label_text, style="SectionLabel.TLabel").pack(anchor="w")
-            value_label = ttk.Label(card, text=value_text, style="PanelTitle.TLabel")
-            value_label.pack(anchor="w", pady=(4, 0))
-            self.stats_spotlight_value_labels.append(value_label)
-        self.metric_strip = ttk.Frame(stats_box, style="Panel.TFrame")
-        self.metric_strip.pack(fill="x", pady=(14, 0))
-        self.metric_value_labels: list[ttk.Label] = []
-        for label_text, value_text in self.build_metric_items(None):
-            metric_card = ttk.Frame(self.metric_strip, style="Panel.TFrame", padding=(12, 10))
-            metric_card.pack(side="left", padx=(0, 10))
-            ttk.Label(metric_card, text=label_text, style="SectionLabel.TLabel").pack(anchor="w")
-            value_label = ttk.Label(metric_card, text=value_text, style="PanelTitle.TLabel")
-            value_label.pack(anchor="w", pady=(4, 0))
-            self.metric_value_labels.append(value_label)
+        self.progress_label = ttk.Label(stats_lead, text="", style="Summary.TLabel", wraplength=460, justify="left")
+        self.progress_label.pack(anchor="w", pady=(6, 0))
+        self.heatmap_caption_label = ttk.Label(stats_lead, text="", style="Muted.TLabel", wraplength=460, justify="left")
+        self.heatmap_caption_label.pack(anchor="w", pady=(6, 0))
         self.progress = ttk.Progressbar(stats_box, maximum=100, style="App.Horizontal.TProgressbar")
-        self.progress.pack(fill="x", pady=(12, 12))
+        self.progress.pack(fill="x", pady=(8, 8))
         self.heatmap_frame = tk.Frame(stats_box, bg=THEME["panel"])
         self.heatmap_frame.pack(fill="x")
         self.heatmap_legend_frame = tk.Frame(stats_box, bg=THEME["panel"])
-        self.heatmap_legend_frame.pack(anchor="w", pady=(8, 0))
+        self.heatmap_legend_frame.pack(anchor="w", pady=(6, 0))
         for label_text, color in self.build_heatmap_legend_items():
             legend_item = tk.Frame(self.heatmap_legend_frame, bg=THEME["panel"])
             legend_item.pack(side="left", padx=(0, 12))
@@ -1587,6 +1451,15 @@ class FloatVocabApp:
             wraplength=860,
             justify="left",
         ).grid(row=2, column=0, sticky="w", pady=(10, 0))
+        words_search_frame = ttk.Frame(words_header, style="Panel.TFrame")
+        words_search_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        words_search_frame.columnconfigure(1, weight=1)
+        ttk.Label(words_search_frame, text="搜索", style="SectionLabel.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.words_search_var = tk.StringVar()
+        self.words_search_var.trace_add("write", lambda *_args: self.refresh_words())
+        self.words_search_entry = ttk.Entry(words_search_frame, textvariable=self.words_search_var)
+        self.words_search_entry.grid(row=0, column=1, sticky="ew")
+        ttk.Label(words_search_frame, text="按英文单词或中文释义匹配", style="Muted.TLabel").grid(row=0, column=2, sticky="e", padx=(10, 0))
         words_table_frame = ttk.Frame(words_tab, style="Panel.TFrame")
         words_table_frame.grid(row=1, column=0, sticky="nsew")
         words_table_frame.columnconfigure(0, weight=1)
@@ -1773,14 +1646,19 @@ class FloatVocabApp:
         current_language_code = plan["current_language_code"] or DEFAULT_LANGUAGE_CODE
         self.lexicons = self.db.lexicons(current_language_code)
         values = [f"{row['id']} · {row['name']} ({row['mastered'] or 0}/{row['total'] or 0})" for row in self.lexicons]
-        self.lexicon_combo["values"] = values
-        self.language_combo["values"] = language_values
+        if hasattr(self, "lexicon_combo"):
+            self.lexicon_combo["values"] = values
+        if hasattr(self, "language_combo"):
+            self.language_combo["values"] = language_values
         self.loading_plan = True
         self.language_var.set(self.language_display(current_language_code))
         self.lexicon_var.set("")
         for index, row in enumerate(self.lexicons):
             if row["id"] == plan["lexicon_id"]:
-                self.lexicon_combo.current(index)
+                if hasattr(self, "lexicon_combo"):
+                    self.lexicon_combo.current(index)
+                else:
+                    self.lexicon_var.set(values[index])
                 break
         self.daily_new_var.set(plan["daily_new"])
         self.target_date_var.set(plan["target_date"] or "")
@@ -1790,9 +1668,12 @@ class FloatVocabApp:
         self.widget_size_var.set(plan["widget_size"] if "widget_size" in plan.keys() else "medium")
         self.loading_plan = False
         has_lexicons = bool(self.lexicons)
-        self.lexicon_combo.configure(state="readonly" if has_lexicons else "disabled")
-        self.lexicon_state_label.configure(text=self.build_lexicon_state_text(has_lexicons))
-        self.import_language_label.configure(text=f"当前导入语言：{self.language_display(current_language_code)}")
+        if hasattr(self, "lexicon_combo"):
+            self.lexicon_combo.configure(state="readonly" if has_lexicons else "disabled")
+        if hasattr(self, "lexicon_state_label"):
+            self.lexicon_state_label.configure(text=self.build_lexicon_state_text(has_lexicons))
+        if hasattr(self, "import_language_label"):
+            self.import_language_label.configure(text=f"当前导入语言：{self.language_display(current_language_code)}")
         language_map = dict(self.language_options)
         language_name = language_map.get(current_language_code, current_language_code)
         self.content_notebook.tab(1, text=self.build_words_tab_title(language_name))
@@ -1948,6 +1829,8 @@ class FloatVocabApp:
 
     def refresh_example_status(self):
         lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
+        if not hasattr(self, "example_status_label"):
+            return
         if not lexicon_id:
             self.example_status_label.configure(text="先导入当前语言的词库，再补全例句。")
             return
@@ -1956,7 +1839,8 @@ class FloatVocabApp:
 
     def enrich_examples(self):
         lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
-        self.example_status_label.configure(text="正在补全例句...")
+        if hasattr(self, "example_status_label"):
+            self.example_status_label.configure(text="正在补全例句...")
 
         def worker():
             try:
@@ -1987,9 +1871,6 @@ class FloatVocabApp:
         stats = self.study_service.get_study_stats()
         metric_items = self.build_metric_items(stats)
         for label, (_title, value) in zip(getattr(self, "metric_value_labels", []), metric_items):
-            label.configure(text=value)
-        spotlight_items = self.build_stats_spotlight_items(stats)
-        for label, (_title, value) in zip(getattr(self, "stats_spotlight_value_labels", []), spotlight_items):
             label.configure(text=value)
         self.progress_label.configure(text=self.build_stats_progress_text(stats))
         if hasattr(self, "heatmap_caption_label"):
@@ -2037,8 +1918,13 @@ class FloatVocabApp:
         lexicon_id = self.selected_lexicon_id() or self.settings_service.get_plan_settings()["lexicon_id"]
         if not lexicon_id:
             return
+        query = ""
+        if hasattr(self, "words_search_var"):
+            query = self.words_search_var.get().strip().casefold()
         rows = self.study_service.get_recent_words(lexicon_id, limit=5000)
         for row in rows:
+            if query and query not in str(row["word"]).casefold() and query not in str(row["meaning"]).casefold():
+                continue
             self.words_tree.insert("", "end", values=(row["word"], row["meaning"], status_text(row["status"])))
 
     def refresh_daily_briefs(self):
