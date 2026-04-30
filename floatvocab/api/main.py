@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import app as legacy_app
+from floatvocab.api.cloud_sync import CloudSyncError, SupabaseCloudSync
 from floatvocab.services import NewsService, SettingsService, StudyService
 
 
@@ -54,6 +55,11 @@ class AppSettingsPayload(BaseModel):
     launch_at_startup: bool = False
 
 
+class CloudAuthPayload(BaseModel):
+    email: str
+    password: str = Field(min_length=6)
+
+
 def to_jsonable(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -74,6 +80,7 @@ class ApiContext:
         self.study_service = StudyService(self.db)
         self.settings_service = SettingsService(self.db)
         self.news_service = NewsService(db_path)
+        self.cloud_sync = SupabaseCloudSync(self.db)
 
     def close(self) -> None:
         self.db.conn.close()
@@ -184,6 +191,67 @@ async def save_app_settings(payload: AppSettingsPayload):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def cloud_or_400(action):
+    try:
+        return to_jsonable(action())
+    except CloudSyncError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/cloud/config")
+async def cloud_config():
+    return context().cloud_sync.config_status()
+
+
+@app.get("/cloud/session")
+async def cloud_session():
+    return {
+        "configured": context().cloud_sync.configured(),
+        "user": context().cloud_sync.current_user(),
+        "local": context().cloud_sync.local_summary(),
+    }
+
+
+@app.post("/cloud/signup")
+async def cloud_signup(payload: CloudAuthPayload):
+    email = payload.email.strip()
+    return cloud_or_400(lambda: context().cloud_sync.sign_up(email, payload.password))
+
+
+@app.post("/cloud/login")
+async def cloud_login(payload: CloudAuthPayload):
+    email = payload.email.strip()
+    return cloud_or_400(lambda: context().cloud_sync.login(email, payload.password))
+
+
+@app.post("/cloud/logout")
+async def cloud_logout():
+    context().cloud_sync.clear_session()
+    return {"ok": True}
+
+
+@app.get("/cloud/sync/status")
+async def cloud_sync_status():
+    def action():
+        return {
+            "user": context().cloud_sync.current_user(),
+            "local": context().cloud_sync.local_summary(),
+            "remote": context().cloud_sync.remote_state(),
+        }
+
+    return cloud_or_400(action)
+
+
+@app.post("/cloud/sync/upload")
+async def cloud_sync_upload():
+    return cloud_or_400(context().cloud_sync.upload)
+
+
+@app.post("/cloud/sync/download")
+async def cloud_sync_download():
+    return cloud_or_400(context().cloud_sync.download)
 
 
 @app.get("/languages")

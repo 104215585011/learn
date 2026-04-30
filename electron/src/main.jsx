@@ -330,11 +330,180 @@ function SettingsView({ plan, setPlan }) {
   );
 }
 
-function ProfileView() {
+function formatSyncTime(value) {
+  if (!value) {
+    return "暂无";
+  }
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+function ProfileView({ onCloudRestored }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [session, setSession] = useState(null);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function refreshCloudState() {
+    const sessionData = await api.cloudSession();
+    setSession(sessionData);
+    if (sessionData.user) {
+      try {
+        const status = await api.cloudSyncStatus();
+        setSyncStatus(status);
+        return status;
+      } catch (error) {
+        setMessage(error.message);
+      }
+    }
+    return null;
+  }
+
+  useEffect(() => {
+    refreshCloudState().catch((error) => setMessage(error.message));
+  }, []);
+
+  async function login(mode) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const payload = { email, password };
+      const result = mode === "signup" ? await api.cloudSignup(payload) : await api.cloudLogin(payload);
+      if (result.needs_confirmation) {
+        setMessage("注册成功，请先到邮箱完成确认后再登录。");
+        return;
+      }
+      const status = await refreshCloudState();
+      if (status?.remote && Number(status.local?.reviews_count || 0) === 0) {
+        await api.cloudSyncDownload();
+        setMessage("已登录，并自动从云端恢复学习数据。");
+        await onCloudRestored?.();
+        await refreshCloudState();
+      } else {
+        setMessage("已登录 FloatVocab 云同步。");
+      }
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function logout() {
+    setBusy(true);
+    setMessage("");
+    try {
+      await api.cloudLogout();
+      setSyncStatus(null);
+      await refreshCloudState();
+      setMessage("已退出云同步账号。");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function upload() {
+    setBusy(true);
+    setMessage("");
+    try {
+      await api.cloudSyncUpload();
+      await refreshCloudState();
+      setMessage("已上传当前学习数据到云端。");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function download() {
+    setBusy(true);
+    setMessage("");
+    try {
+      await api.cloudSyncDownload();
+      await onCloudRestored?.();
+      await refreshCloudState();
+      setMessage("已从云端恢复学习数据。");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const user = session?.user;
+
   return (
-    <Card title="个人主页" subtitle="后续可以放学习统计、账户信息和同步状态。">
-      <div className="rounded-xl bg-background p-6 text-sm text-muted-foreground">本地用户 · FloatVocab Desktop</div>
-    </Card>
+    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <Card title="FloatVocab 账号" subtitle="登录后会把学习进度同步到 Supabase。">
+        {user ? (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-background p-4">
+              <div className="text-xs text-muted-foreground">当前账号</div>
+              <div className="mt-1 text-base font-semibold">{user.email}</div>
+            </div>
+            <Button disabled={busy} onClick={logout}>
+              退出登录
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Field label="邮箱">
+              <input className={inputClass()} value={email} onChange={(event) => setEmail(event.target.value)} />
+            </Field>
+            <Field label="密码">
+              <input className={inputClass()} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            </Field>
+            <div className="flex gap-2">
+              <Button disabled={busy || !email || !password} variant="primary" onClick={() => login("login")}>
+                登录
+              </Button>
+              <Button disabled={busy || !email || !password} onClick={() => login("signup")}>
+                注册
+              </Button>
+            </div>
+          </div>
+        )}
+        {message ? <p className="mt-4 rounded-lg bg-background p-3 text-xs text-muted-foreground">{message}</p> : null}
+      </Card>
+
+      <Card title="云端学习数据" subtitle="同步词库、复习进度、学习计划、统计和个人设置。">
+        <div className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-background p-3">
+              <div className="text-xs text-muted-foreground">本地复习记录</div>
+              <div className="mt-1 text-lg font-semibold">{syncStatus?.local?.reviews_count ?? session?.local?.reviews_count ?? 0}</div>
+            </div>
+            <div className="rounded-lg bg-background p-3">
+              <div className="text-xs text-muted-foreground">本地单词</div>
+              <div className="mt-1 text-lg font-semibold">{syncStatus?.local?.words_count ?? session?.local?.words_count ?? 0}</div>
+            </div>
+          </div>
+          <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground">
+            <div>云端更新时间：{formatSyncTime(syncStatus?.remote?.updated_at)}</div>
+            <div className="mt-1">本地最近变化：{formatSyncTime(syncStatus?.local?.latest_local_change || session?.local?.latest_local_change)}</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy || !user} variant="primary" onClick={upload}>
+              上传到云端
+            </Button>
+            <Button disabled={busy || !user || !syncStatus?.remote} onClick={download}>
+              从云端恢复
+            </Button>
+            <Button disabled={busy || !user} onClick={refreshCloudState}>
+              刷新状态
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -512,21 +681,24 @@ function AppShell() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([api.plan(), api.languages(), api.stats(), api.nextCard()])
-      .then(async ([planData, languagesData, statsData, cardData]) => {
-        setPlan(planData);
-        setLanguages(languagesData);
-        setStats(statsData);
-        setCard(cardData);
-        const [lexiconRows, briefRows] = await Promise.all([api.lexicons(planData.current_language_code), api.latestNews(planData.current_language_code)]);
-        setLexicons(lexiconRows);
-        setBriefs(briefRows);
-        if (planData.lexicon_id) {
-          setWords(await api.recentWords(planData.lexicon_id, 120));
-        }
-      })
-      .catch((reason) => setError(reason.message));
+    loadWorkspaceData().catch((reason) => setError(reason.message));
   }, []);
+
+  async function loadWorkspaceData() {
+    const [planData, languagesData, statsData, cardData] = await Promise.all([api.plan(), api.languages(), api.stats(), api.nextCard()]);
+    setPlan(planData);
+    setLanguages(languagesData);
+    setStats(statsData);
+    setCard(cardData);
+    const [lexiconRows, briefRows] = await Promise.all([api.lexicons(planData.current_language_code), api.latestNews(planData.current_language_code)]);
+    setLexicons(lexiconRows);
+    setBriefs(briefRows);
+    if (planData.lexicon_id) {
+      setWords(await api.recentWords(planData.lexicon_id, 120));
+    } else {
+      setWords([]);
+    }
+  }
 
   useEffect(() => {
     if (!plan?.lexicon_id) {
@@ -542,7 +714,7 @@ function AppShell() {
 
   function renderContent() {
     if (activeSidebar === "profile") {
-      return <ProfileView />;
+      return <ProfileView onCloudRestored={loadWorkspaceData} />;
     }
     if (activeSidebar === "settings") {
       return <SettingsView plan={plan} setPlan={setPlan} />;
