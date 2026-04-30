@@ -75,3 +75,14 @@ class PlanRepository:
             (language_code, lexicon_id, current_word_id),
         )
         self.conn.commit()
+
+    def set_global_translation_enabled(self, enabled: bool) -> None:
+        self.conn.execute(
+            """
+            UPDATE plans
+            SET global_translation_enabled = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+            """,
+            (1 if enabled else 0,),
+        )
+        self.conn.commit()

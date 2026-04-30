@@ -1,0 +1,428 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent !important;
+}
+
+body {
+  margin: 0;
+  color: #111827;
+  font-family: "Inter", "Noto Sans SC", sans-serif;
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='14' height='9' viewBox='0 0 14 9' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 2L7 7L12 2' stroke='%236B7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+.electron-drag {
+  -webkit-app-region: drag;
+}
+
+.electron-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.floating-card-window {
+  height: 100%;
+  background: transparent;
+  padding: 0;
+}
+
+.floating-study-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: rgba(245, 245, 248, 0.85);
+  border: 0.5px solid rgba(255, 255, 255, 0.75);
+  border-radius: 20px;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.15),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  perspective: 1000px;
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.floating-feedback-known {
+  background: rgba(220, 252, 231, 0.6);
+  box-shadow:
+    0 8px 34px rgba(22, 163, 74, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.floating-feedback-forgot {
+  background: rgba(254, 226, 226, 0.6);
+  box-shadow:
+    0 8px 34px rgba(220, 38, 38, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.floating-card-inner {
+  position: relative;
+  width: 100%;
+  min-height: 96px;
+  transform-style: preserve-3d;
+  transition: transform 500ms cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+
+.floating-card-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.floating-flip-shell {
+  margin: 0 24px;
+  padding-top: 8px;
+  perspective: 1000px;
+}
+
+.floating-flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.floating-flip-face:first-child {
+  position: relative;
+}
+
+.floating-flip-back {
+  transform: rotateY(180deg);
+}
+
+.floating-card-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 6px;
+  color: rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  line-height: 1;
+  text-align: left;
+}
+
+.floating-close-button {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.22);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.floating-close-button:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+}
+
+.floating-word-area {
+  padding: 10px 24px 4px;
+  text-align: center;
+}
+
+.floating-word {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #1a1a1a;
+  font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  font-size: 46px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: -2px;
+  line-height: 1.05;
+  word-break: break-word;
+}
+
+.floating-sound-button {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #555;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.floating-sound-button:hover,
+.floating-word.is-speaking .floating-sound-button,
+.floating-sound-button.is-playing {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+}
+
+.floating-sound-button.is-playing {
+  animation: floating-sound-pulse 600ms ease infinite alternate;
+}
+
+@keyframes floating-sound-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+.floating-sound-button:active {
+  transform: scale(0.94);
+}
+
+.floating-phonetic {
+  margin-top: 6px;
+  min-height: 18px;
+  color: rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  line-height: 1.35;
+}
+
+.floating-progress-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px 10px;
+}
+
+.floating-progress-bar {
+  height: 3px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.floating-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #6366f1;
+  transition: width 300ms ease;
+}
+
+.floating-progress-text {
+  color: rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.floating-card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.floating-action-button {
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: -apple-system, "SF Pro Text", sans-serif;
+  letter-spacing: 0.1px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+.floating-action-button:hover {
+  transform: translateY(-1px);
+}
+
+.floating-action-button:active {
+  transform: scale(0.96);
+}
+
+.floating-action-forgot {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.floating-action-forgot:hover {
+  background: #fecaca;
+}
+
+.floating-action-flip {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.floating-action-flip:hover {
+  background: #e5e7eb;
+}
+
+.floating-action-known {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.floating-action-known:hover {
+  background: #bbf7d0;
+}
+
+.floating-card-hint {
+  padding: 0 16px 14px;
+  color: rgba(0, 0, 0, 0.2);
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  text-align: center;
+}
+
+.floating-meaning-area {
+  padding: 10px 0 4px;
+  text-align: center;
+}
+
+.floating-pos {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.floating-meaning-text {
+  margin-bottom: 10px;
+  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.floating-example {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: left;
+}
+
+.floating-front-placeholder {
+  height: 10px;
+}
+
+.floating-streak-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 24px 14px;
+  border-top: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+.floating-streak-label,
+.floating-streak-count {
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.floating-streak-label {
+  color: rgba(0, 0, 0, 0.28);
+}
+
+.floating-streak-count {
+  color: #6366f1;
+  font-weight: 500;
+}
+
+.floating-streak-dots {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+}
+
+.floating-streak-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.07);
+  transition:
+    background-color 200ms ease,
+    transform 200ms ease;
+}
+
+.floating-streak-dot.is-yes {
+  background: #dcfce7;
+}
+
+.floating-streak-dot.is-no {
+  background: #fee2e2;
+}
+
+.floating-streak-dot.is-new {
+  transform: scale(1.15);
+}
+
+.floating-toast {
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(30, 30, 30, 0.85);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition:
+    bottom 250ms ease,
+    opacity 250ms ease;
+}
+
+.floating-toast.is-visible {
+  bottom: 16px;
+  opacity: 1;
+}

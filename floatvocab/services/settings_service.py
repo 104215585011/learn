@@ -47,3 +47,37 @@ class SettingsService:
 
     def save_float_style(self, alpha: float, font_size: int, bg_color: str, widget_size: str):
         return self.db.save_float_style(alpha, font_size, bg_color, widget_size)
+
+    def set_global_translation_enabled(self, enabled: bool):
+        return self.db.plan_repository.set_global_translation_enabled(enabled)
+
+    def get_user_profile(self):
+        return self.db.user_profile()
+
+    def save_user_profile(self, display_name: str, avatar_url: str = "", bio: str = ""):
+        normalized_name = (display_name or "").strip()
+        if not normalized_name:
+            raise ValueError("display_name is required")
+        return self.db.save_user_profile(normalized_name, (avatar_url or "").strip(), (bio or "").strip())
+
+    def get_app_settings(self):
+        return self.db.app_settings()
+
+    def save_app_settings(
+        self,
+        *,
+        theme: str,
+        default_window_width: int,
+        default_window_height: int,
+        launch_at_startup: bool,
+    ):
+        if theme not in {"light", "dark", "system"}:
+            raise ValueError("theme must be light, dark, or system")
+        if default_window_width < 900 or default_window_height < 600:
+            raise ValueError("default window size is too small")
+        return self.db.save_app_settings(
+            theme=theme,
+            default_window_width=default_window_width,
+            default_window_height=default_window_height,
+            launch_at_startup=launch_at_startup,
+        )

@@ -5,5 +5,10 @@ floatvocab.db
 *.db-shm
 build/
 dist/
+node_modules/
+electron/dist/
+electron/node_modules/
+data/example_cache/
+tests/_tmp_ui_layout/
 *.spec
 .worktrees/

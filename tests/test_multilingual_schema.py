@@ -98,6 +98,18 @@ class MultilingualSchemaTests(unittest.TestCase):
         self.assertEqual(legacy_word["word"], "legacy")
         self.assertEqual(legacy_word["meaning"], "old meaning")
 
+    def test_schema_migration_adds_global_translation_toggle_disabled_by_default(self):
+        conn = self._create_legacy_schema()
+        self.addCleanup(conn.close)
+
+        self._initialize(conn)
+
+        plan_columns = {row["name"] for row in conn.execute("PRAGMA table_info(plans)").fetchall()}
+        plan = conn.execute("SELECT global_translation_enabled FROM plans WHERE id = 1").fetchone()
+
+        self.assertIn("global_translation_enabled", plan_columns)
+        self.assertEqual(plan["global_translation_enabled"], 0)
+
     def test_lexicon_creation_is_unique_per_language_and_import_accepts_language_code(self):
         conn = self._create_legacy_schema()
         self.addCleanup(conn.close)
@@ -170,6 +182,18 @@ class MultilingualSchemaTests(unittest.TestCase):
 
         updated_plan = repo.fetch_plan()
         self.assertEqual(updated_plan["current_language_code"], "zh")
+
+    def test_set_global_translation_enabled_persists_toggle(self):
+        conn = self._create_legacy_schema()
+        self.addCleanup(conn.close)
+        self._initialize(conn)
+
+        repo = PlanRepository(conn)
+        repo.set_global_translation_enabled(True)
+        self.assertEqual(repo.fetch_plan()["global_translation_enabled"], 1)
+
+        repo.set_global_translation_enabled(False)
+        self.assertEqual(repo.fetch_plan()["global_translation_enabled"], 0)
 
 
 if __name__ == "__main__":

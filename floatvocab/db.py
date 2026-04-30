@@ -75,6 +75,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
           font_size INTEGER NOT NULL DEFAULT 26,
           bg_color TEXT NOT NULL DEFAULT '#F7FAF5',
           widget_size TEXT NOT NULL DEFAULT 'medium',
+          global_translation_enabled INTEGER NOT NULL DEFAULT 0,
           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (lexicon_id) REFERENCES lexicons(id) ON DELETE SET NULL
         );
@@ -96,6 +97,23 @@ def _init_schema(conn: sqlite3.Connection) -> None:
           unknown INTEGER NOT NULL DEFAULT 0,
           new_seen INTEGER NOT NULL DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS user_profile (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          display_name TEXT NOT NULL DEFAULT 'FloatVocab User',
+          avatar_url TEXT NOT NULL DEFAULT '',
+          bio TEXT NOT NULL DEFAULT '',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          theme TEXT NOT NULL DEFAULT 'light',
+          default_window_width INTEGER NOT NULL DEFAULT 1180,
+          default_window_height INTEGER NOT NULL DEFAULT 760,
+          launch_at_startup INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
         """
     )
     _ensure_lexicon_schema(conn)
@@ -108,6 +126,8 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         """,
         [(date.today() + timedelta(days=90)).isoformat(), DEFAULT_LANGUAGE_CODE],
     )
+    conn.execute("INSERT OR IGNORE INTO user_profile (id) VALUES (1)")
+    conn.execute("INSERT OR IGNORE INTO app_settings (id) VALUES (1)")
     conn.commit()
 
 
@@ -146,6 +166,8 @@ def _ensure_plan_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE plans ADD COLUMN current_word_id INTEGER")
     if "current_language_code" not in columns:
         conn.execute(f"ALTER TABLE plans ADD COLUMN current_language_code TEXT NOT NULL DEFAULT '{DEFAULT_LANGUAGE_CODE}'")
+    if "global_translation_enabled" not in columns:
+        conn.execute("ALTER TABLE plans ADD COLUMN global_translation_enabled INTEGER NOT NULL DEFAULT 0")
 
 
 def _ensure_word_columns(conn: sqlite3.Connection) -> None:

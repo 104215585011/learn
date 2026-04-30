@@ -492,7 +492,8 @@ class AppLayoutTests(unittest.TestCase):
             ui.root.update()
 
             self.assertEqual(ui.hero_title_label.cget("text"), "FloatVocab")
-            self.assertIn("安静", ui.hero_body_label.cget("text"))
+            self.assertEqual(ui.hero_body_label.cget("text"), "工作台")
+            self.assertEqual(ui.sidebar_frame.cget("bg"), app.THEME["sidebar"])
             self.assertFalse(hasattr(ui, "hero_summary_label"))
             self.assertFalse(hasattr(ui, "hero_intro_label"))
             self.assertEqual(ui.style_box_title_label.cget("text"), "阅读外观")
@@ -505,12 +506,12 @@ class AppLayoutTests(unittest.TestCase):
         finally:
             ui.close()
 
-    def test_theme_uses_cool_toned_brand_palette_for_workbench_refresh(self):
-        self.assertEqual(app.THEME["bg"], "#F3F7FB")
-        self.assertEqual(app.THEME["panel"], "#FAFCFF")
-        self.assertEqual(app.THEME["hero"], "#E8F0F8")
-        self.assertEqual(app.THEME["accent"], "#5C7C99")
-        self.assertEqual(app.THEME["muted"], "#607287")
+    def test_theme_uses_linear_inspired_brand_palette_for_workbench_refresh(self):
+        self.assertEqual(app.THEME["bg"], "#F8F9FB")
+        self.assertEqual(app.THEME["panel"], "#FFFFFF")
+        self.assertEqual(app.THEME["sidebar"], "#1C1C2E")
+        self.assertEqual(app.THEME["accent"], "#6366F1")
+        self.assertEqual(app.THEME["heat_0"], "#E5E7EB")
 
     def test_dashboard_panels_use_calm_copy_and_supporting_status_layout(self):
         ui = app.FloatVocabApp()
@@ -546,7 +547,7 @@ class AppLayoutTests(unittest.TestCase):
             self.assertEqual(int(style_grid["row"]), 0)
             self.assertEqual(int(stats_grid["column"]), 0)
             self.assertEqual(int(stats_grid["row"]), 1)
-            self.assertEqual(int(stats_grid["columnspan"]), 2)
+            self.assertEqual(int(stats_grid.get("columnspan", 1)), 1)
         finally:
             ui.close()
 
@@ -564,16 +565,16 @@ class AppLayoutTests(unittest.TestCase):
         finally:
             ui.close()
 
-    def test_dashboard_uses_compact_panel_spacing(self):
+    def test_dashboard_uses_airier_panel_spacing(self):
         ui = app.FloatVocabApp()
         try:
             ui.root.update_idletasks()
             ui.root.update()
 
-            self.assertLessEqual(max(map(int, ui.plan_box_frame.cget("padding"))), 14)
-            self.assertLessEqual(max(map(int, ui.style_box_frame.cget("padding"))), 14)
-            self.assertLessEqual(max(map(int, ui.stats_box_frame.cget("padding"))), 14)
-            self.assertLess(ui.content_notebook.grid_info()["pady"][0], 14)
+            self.assertGreaterEqual(max(map(int, ui.plan_box_frame.cget("padding"))), 18)
+            self.assertGreaterEqual(max(map(int, ui.style_box_frame.cget("padding"))), 18)
+            self.assertGreaterEqual(max(map(int, ui.stats_box_frame.cget("padding"))), 18)
+            self.assertEqual(ui.content_notebook.grid_info()["pady"], 0)
         finally:
             ui.close()
 
@@ -805,8 +806,8 @@ class AppLayoutTests(unittest.TestCase):
 
             self.assertEqual(ui.float_window.card_header.cget("fg"), app.THEME["muted"])
             self.assertEqual(ui.float_window.action_frame.cget("bg"), ui.settings_service.get_plan_settings()["bg_color"])
-            self.assertEqual(ui.float_window.drag_bar.cget("bg"), app.THEME["panel_alt"])
-            self.assertGreater(int(ui.float_window.panel_frame.cget("padx")), 24)
+            self.assertEqual(ui.float_window.drag_bar.cget("bg"), app.THEME["border"])
+            self.assertGreaterEqual(int(ui.float_window.panel_frame.cget("padx")), 20)
         finally:
             ui.close()
 
@@ -983,7 +984,7 @@ class AppLayoutTests(unittest.TestCase):
 
             self.assertEqual(ui.float_window.word_label.cget("text"), "aggressive")
             self.assertIn("故作勇为的", ui.float_window.detail_label.cget("text"))
-            self.assertLessEqual(word_font_size, 22)
+            self.assertEqual(word_font_size, 48)
             self.assertGreater(word_font_size, detail_font_size)
         finally:
             ui.close()
