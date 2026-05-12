@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import shutil
 import unittest
@@ -5,7 +6,12 @@ from datetime import date, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from floatvocab.db import initialize_database, open_connection
+from floatvocab.db import (
+    BUILTIN_LEXICON_NAME,
+    LEGACY_BUILTIN_LEXICON_NAME,
+    initialize_database,
+    open_connection,
+)
 from floatvocab.repositories.lexicon_repository import LexiconRepository
 from floatvocab.repositories.plan_repository import PlanRepository
 
@@ -97,6 +103,71 @@ class MultilingualSchemaTests(unittest.TestCase):
         self.assertEqual(legacy_word["lexicon_id"], 1)
         self.assertEqual(legacy_word["word"], "legacy")
         self.assertEqual(legacy_word["meaning"], "old meaning")
+
+    def test_builtin_lexicon_uses_readable_chinese_name_on_fresh_database(self):
+        self.builtin_lexicon.write_text(
+            json.dumps(
+                [
+                    {
+                        "word": "personnel",
+                        "phonetic": "/ˌpɜːsəˈnel/",
+                        "meaning": "人员",
+                        "example": "The personnel file was updated.",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        conn = open_connection(self.db_path)
+        self.addCleanup(conn.close)
+
+        self._initialize(conn)
+
+        lexicons = conn.execute("SELECT name FROM lexicons ORDER BY id").fetchall()
+        self.assertEqual([row["name"] for row in lexicons], [BUILTIN_LEXICON_NAME])
+        self.assertNotIn(LEGACY_BUILTIN_LEXICON_NAME, [row["name"] for row in lexicons])
+
+    def test_legacy_builtin_lexicon_name_is_renamed_during_migration(self):
+        conn = self._create_legacy_schema()
+        self.addCleanup(conn.close)
+        conn.execute("UPDATE lexicons SET name = ? WHERE id = 1", (LEGACY_BUILTIN_LEXICON_NAME,))
+        conn.commit()
+
+        self._initialize(conn)
+
+        lexicon = conn.execute("SELECT id, name FROM lexicons WHERE id = 1").fetchone()
+        plan = conn.execute("SELECT lexicon_id FROM plans WHERE id = 1").fetchone()
+        self.assertEqual(lexicon["name"], BUILTIN_LEXICON_NAME)
+        self.assertEqual(plan["lexicon_id"], 1)
+
+    def test_legacy_builtin_lexicon_is_merged_when_canonical_already_exists(self):
+        conn = open_connection(self.db_path)
+        self.addCleanup(conn.close)
+        self._initialize(conn)
+        conn.execute(
+            "INSERT INTO lexicons (id, name, language_code, source) VALUES (100, ?, 'en', 'built-in')",
+            (LEGACY_BUILTIN_LEXICON_NAME,),
+        )
+        conn.execute(
+            "INSERT INTO words (lexicon_id, word, meaning, next_review_date) VALUES (100, 'legacy-only', 'old', '2030-01-01')"
+        )
+        canonical_id = conn.execute(
+            "SELECT id FROM lexicons WHERE name = ? AND language_code = 'en'",
+            (BUILTIN_LEXICON_NAME,),
+        ).fetchone()["id"]
+        conn.execute("UPDATE plans SET lexicon_id = ? WHERE id = 1", (100,))
+        conn.commit()
+
+        self._initialize(conn)
+
+        rows = conn.execute(
+            "SELECT id, name FROM lexicons WHERE language_code = 'en' AND name IN (?, ?)",
+            (BUILTIN_LEXICON_NAME, LEGACY_BUILTIN_LEXICON_NAME),
+        ).fetchall()
+        plan = conn.execute("SELECT lexicon_id FROM plans WHERE id = 1").fetchone()
+        self.assertEqual([(row["id"], row["name"]) for row in rows], [(canonical_id, BUILTIN_LEXICON_NAME)])
+        self.assertEqual(plan["lexicon_id"], canonical_id)
 
     def test_schema_migration_adds_global_translation_toggle_disabled_by_default(self):
         conn = self._create_legacy_schema()

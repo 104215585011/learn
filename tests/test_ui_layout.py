@@ -13,6 +13,35 @@ import app
 
 
 class AppLayoutTests(unittest.TestCase):
+    def test_electron_floating_word_uses_inter_and_natural_tracking(self):
+        styles = (Path(__file__).resolve().parents[1] / "electron" / "src" / "styles.css").read_text(encoding="utf-8")
+        start = styles.index(".floating-word {")
+        end = styles.index("}", start)
+        block = styles[start:end]
+
+        self.assertIn('font-family: "Inter", system-ui, sans-serif;', block)
+        self.assertIn("font-size: 42px;", block)
+        self.assertIn("letter-spacing: -0.5px;", block)
+        self.assertNotIn("font-style: italic", block)
+
+    def test_floating_window_word_font_size_follows_user_setting(self):
+        ui = app.FloatVocabApp()
+        try:
+            ui.db.save_float_style(0.88, 26, "#F7FAF5", "medium")
+            ui.float_window.apply_style()
+            ui.root.update_idletasks()
+            default_word_size = abs(int(tkfont.Font(font=ui.float_window.word_label.cget("font")).actual("size")))
+
+            ui.db.save_float_style(0.88, 36, "#F7FAF5", "medium")
+            ui.float_window.apply_style()
+            ui.root.update_idletasks()
+            larger_word_size = abs(int(tkfont.Font(font=ui.float_window.word_label.cget("font")).actual("size")))
+
+            self.assertEqual(default_word_size, 42)
+            self.assertEqual(larger_word_size, 52)
+        finally:
+            ui.close()
+
     def test_build_dashboard_summary_text_prefers_due_and_mastery_snapshot(self):
         ui = app.FloatVocabApp.__new__(app.FloatVocabApp)
         ui.study_service = mock.Mock()

@@ -1,0 +1,188 @@
+{
+  "features": [
+    {
+      "id": "core-flashcard",
+      "priority": 1,
+      "area": "study",
+      "title": "核心悬浮窗闪卡学习",
+      "user_visible_behavior": "桌面悬浮窗置顶显示单词正面，点击或按 Space 翻面显示释义和音标；Right/Alt+Right 标记认识进入下一词，Left/Alt+Left 标记不认识进入下一词，Esc 隐藏悬浮窗",
+      "status": "passing",
+      "verification": [
+        "python app.py 启动应用",
+        "选择一个词库并开始学习",
+        "悬浮窗出现并置顶显示单词",
+        "按 Space 翻面，确认释义显示正确",
+        "按 Right 认识，窗口切换到下一词",
+        "按 Left 不认识，窗口切换到下一词",
+        "按 Esc 隐藏悬浮窗",
+        "python -m pytest tests/test_study_state.py -v 全绿"
+      ],
+      "evidence": "2026-05-12 验证：python -m pytest tests/ -v 在收集阶段被 tests/ui_layout_t4lmacev 权限错误阻断；补充运行 python -m pytest tests/ -v --ignore=tests/ui_layout_t4lmacev --ignore=tmpn5b2d86a --ignore=tmpz9p_obxx，test_study_state.py 全部通过，test_ui_layout.py 中 floating_window 相关用例通过。",
+      "notes": "自动测试覆盖学习状态和 Tk 悬浮窗布局逻辑；Electron 悬浮词卡仍需手工打开验证。"
+    },
+    {
+      "id": "lexicon-import",
+      "priority": 2,
+      "area": "import",
+      "title": "词库导入（TXT / CSV）",
+      "user_visible_behavior": "用户可以导入 TXT（每行：word\\t音标\\t释义\\t例句）或 CSV（列名：word, phonetic, meaning, example）文件，导入后词库出现在词库列表中",
+      "status": "passing",
+      "verification": [
+        "python app.py 启动",
+        "点击导入，选择测试 TXT 文件",
+        "确认词库列表出现新词库",
+        "选择该词库开始学习，确认单词显示正确",
+        "对 CSV 文件重复上述步骤",
+        "python -m pytest tests/test_services.py -v 全绿"
+      ],
+      "evidence": "2026-05-12 验证：忽略不可访问临时目录后，tests/test_services.py 相关服务边界测试通过；tests/test_multilingual_foundations.py 中 import_words 支持 JSON、语言码、去重等导入用例通过。",
+      "notes": "TXT / CSV 导入的 UI 选择流程未手工验证；底层导入能力有自动测试证据。"
+    },
+    {
+      "id": "progress-heatmap",
+      "priority": 3,
+      "area": "dashboard",
+      "title": "进度统计 + 30 天打卡热力图",
+      "user_visible_behavior": "主界面显示今日新词数、复习数、掌握率；30 天热力图按颜色深浅显示每日学习量",
+      "status": "blocked",
+      "verification": [
+        "python app.py 启动",
+        "学习至少一个单词",
+        "返回主界面确认统计数字更新",
+        "热力图今日格子颜色加深",
+        "python -m pytest tests/test_ui_layout.py -v 全绿"
+      ],
+      "evidence": "2026-05-12 验证：python -m pytest tests/ -v 被 tests/ui_layout_t4lmacev 权限错误阻断；忽略该临时目录后 110 passed, 1 failed。唯一失败为 tests/test_ui_layout.py::AppLayoutTests::test_dashboard_fits_primary_controls_without_vertical_scrollbar，失败原因是本机 Anaconda Tk 缺少 listbox.tcl，FloatVocabApp 无法创建 tk.Tk()。",
+      "notes": "热力图/统计文案构建相关用例通过，但完整 dashboard 实例化验证被本机 Tk 环境阻断。"
+    },
+    {
+      "id": "global-translation",
+      "priority": 4,
+      "area": "translation",
+      "title": "全局翻译气泡",
+      "user_visible_behavior": "在任意应用中选中英文文本后，FloatVocab 弹出翻译气泡显示中文释义，气泡位置跟随鼠标",
+      "status": "passing",
+      "verification": [
+        "python app.py 启动",
+        "在其他应用（如记事本）选中英文单词",
+        "确认翻译气泡弹出并显示正确释义",
+        "气泡在鼠标附近合适位置显示",
+        "python -m pytest tests/test_global_translation.py -v 全绿"
+      ],
+      "evidence": "2026-05-12 验证：忽略不可访问临时目录后，tests/test_global_translation.py 全部通过，包括边界定位、拖拽阈值、剪贴板文本过滤、MyMemory 优先级和 Google fallback。",
+      "notes": "依赖 Windows API（ctypes），Linux/macOS 不支持"
+    },
+    {
+      "id": "news-digest",
+      "priority": 5,
+      "area": "news",
+      "title": "多语言新闻摘要",
+      "user_visible_behavior": "主界面新闻板块显示当日英文新闻摘要，支持多语言来源；离线或 API 不可用时优雅降级",
+      "status": "passing",
+      "verification": [
+        "python app.py 启动",
+        "确认新闻板块有内容显示",
+        "断网后重启，确认无崩溃（优雅降级）",
+        "python -m pytest tests/test_news_digest_resilience.py -v 全绿",
+        "python -m pytest tests/test_multilingual_foundations.py -v 全绿"
+      ],
+      "evidence": "2026-05-12 验证：忽略不可访问临时目录后，tests/test_news_digest_resilience.py 全部通过；tests/test_multilingual_foundations.py 多语言基础测试通过。",
+      "notes": "RSS/API 实时联网刷新未在本轮手工验证；离线/异常降级路径有自动测试证据。"
+    },
+    {
+      "id": "enrichment-pipeline",
+      "priority": 6,
+      "area": "enrichment",
+      "title": "单词例句 enrichment pipeline",
+      "user_visible_behavior": "运行 example_pipeline.py 后，词库中的单词获得真实例句，学习时可看到例句",
+      "status": "partial",
+      "verification": [
+        "python example_pipeline.py 运行无报错",
+        "data/example_cache/ 中出现新的 JSON 文件",
+        "python app.py 学习时例句显示正确"
+      ],
+      "evidence": "2026-05-12 验证：tests/test_services.py::test_enrichment_service_enrich_examples_forwards_result_shape 通过；未运行 python example_pipeline.py 做真实 enrichment 端到端验证。",
+      "notes": "服务层包装有测试证据；真实网络/缓存写入/学习界面例句显示仍需单独验证。"
+    },
+    {
+      "id": "electron-shell",
+      "priority": 7,
+      "area": "electron",
+      "title": "Electron 桌面壳",
+      "user_visible_behavior": "cd electron && npm run dev 启动 Electron 应用，显示 dashboard；悬浮窗功能通过 Electron 调用 Python 后端正常工作",
+      "status": "partial",
+      "verification": [
+        "cd electron && npm install",
+        "npm run dev 启动，Electron 窗口出现",
+        "Dashboard 正确渲染词库列表和进度",
+        "悬浮窗能在 Electron 模式下工作"
+      ],
+      "evidence": "2026-05-11/12 验证：electron 目录 npm run build 通过；本轮未运行 npm run dev，也未手工确认 Electron 主窗口、Python FastAPI 子进程和悬浮窗联动。",
+      "notes": "需要 Node.js 环境；build 通过不等于桌面壳运行链路完整通过。"
+    },
+    {
+      "id": "window-position-persistence",
+      "priority": 8,
+      "area": "ux",
+      "title": "悬浮窗位置持久化",
+      "user_visible_behavior": "关闭并重新打开悬浮窗后，窗口出现在上次关闭时的位置",
+      "status": "partial",
+      "verification": [
+        "拖动悬浮窗到屏幕某处",
+        "关闭悬浮窗（Esc）",
+        "重新开始学习",
+        "确认悬浮窗出现在上次的位置"
+      ],
+      "evidence": "2026-05-12 校准：electron/main/index.js 中存在 electron-store 持久化 floatWin.position 的实现；未运行 Electron 手工拖动/关闭/重开验证。",
+      "notes": "代码实现存在；缺少自动测试或手工录屏证据。"
+    },
+    {
+      "id": "exam-lexicon-selector",
+      "priority": 9,
+      "area": "import",
+      "title": "内置考试词库选择器",
+      "user_visible_behavior": "主界面可选择内置词库（初中/高中/考研/CET-4/CET-6/TOEFL/IELTS/SAT/PTE 等），选中后直接开始学习，无需手动导入",
+      "status": "partial",
+      "verification": [
+        "python app.py 启动",
+        "词库选择下拉菜单中出现所有内置词库名称",
+        "选择「考研词汇」，确认词库加载成功",
+        "开始学习，单词正确显示"
+      ],
+      "evidence": "2026-05-12 验证：tests/test_multilingual_foundations.py 中初始化数据库自动导入多语言 JSON 包、迁移 legacy lexicons、语言列表匹配等用例通过；未手工打开下拉菜单确认全部考试词库显示。",
+      "notes": "依赖 data/vocab_sources/ 目录中的 JSON 文件；UI 选择器仍需手工验证。"
+    },
+    {
+      "id": "transparency-font-color",
+      "priority": 10,
+      "area": "ux",
+      "title": "悬浮窗外观调节（透明度 / 字号 / 背景色）",
+      "user_visible_behavior": "用户可在设置中调节悬浮窗透明度、字体大小和背景颜色，修改立即生效",
+      "status": "partial",
+      "verification": [
+        "打开悬浮窗设置面板",
+        "调节透明度滑块，确认窗口透明度实时变化",
+        "调节字号，确认单词字体大小变化",
+        "点击背景色，选择颜色，确认背景色变化",
+        "关闭重开，确认设置持久化"
+      ],
+      "evidence": "2026-05-12 验证：tests/test_multilingual_schema.py 中 plan schema 和设置持久化相关用例通过；tests/test_ui_layout.py::test_build_style_snapshot_items_formats_float_window_preferences 通过。Electron 浮窗 CSS 字号本轮可构建通过，但设置页实时调节未手工验证。",
+      "notes": "持久化模型存在；Electron 设置 UI 的实时生效链路仍需验证/完善。"
+    },
+    {
+      "id": "cloud-sync",
+      "priority": 11,
+      "area": "sync",
+      "title": "云同步 API",
+      "user_visible_behavior": "学习记录和词库状态可通过 floatvocab/api/cloud_sync.py 同步到云端，多设备共享进度",
+      "status": "partial",
+      "verification": [
+        "floatvocab/api/main.py 启动 API 服务无报错",
+        "cloud_sync.py 上传学习记录成功",
+        "在另一设备（或模拟）恢复记录成功"
+      ],
+      "evidence": "2026-05-12 验证：floatvocab/api/cloud_sync.py 与 floatvocab/api/main.py 语法编译通过；Supabase Auth settings 连接成功；同步表 floatvocab_profiles 和 floatvocab_sync_state 当前为 404，说明 SQL 尚未在 Supabase 控制台执行，上传/恢复未端到端验证。",
+      "notes": "需要先运行 supabase/floatvocab_sync.sql，再用真实账号验证上传和另一设备恢复。"
+    }
+  ]
+}

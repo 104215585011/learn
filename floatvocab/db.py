@@ -7,6 +7,8 @@ from typing import Callable
 import news_digest
 
 DEFAULT_LANGUAGE_CODE = "en"
+BUILTIN_LEXICON_NAME = "考研核心 50"
+LEGACY_BUILTIN_LEXICON_NAME = "鑰冪爺鏍稿績 50"
 
 
 def open_connection(db_path: Path) -> sqlite3.Connection:
@@ -119,6 +121,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     _ensure_lexicon_schema(conn)
     _ensure_plan_columns(conn)
     _ensure_word_columns(conn)
+    _repair_builtin_lexicon_name(conn)
     conn.execute(
         """
         INSERT OR IGNORE INTO plans (id, lexicon_id, daily_new, target_date, current_language_code)
@@ -182,15 +185,40 @@ def _ensure_word_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE words ADD COLUMN example_attempts INTEGER NOT NULL DEFAULT 0")
 
 
+def _repair_builtin_lexicon_name(conn: sqlite3.Connection) -> None:
+    legacy = conn.execute(
+        "SELECT id FROM lexicons WHERE name = ? AND language_code = ?",
+        (LEGACY_BUILTIN_LEXICON_NAME, DEFAULT_LANGUAGE_CODE),
+    ).fetchone()
+    if not legacy:
+        return
+    canonical = conn.execute(
+        "SELECT id FROM lexicons WHERE name = ? AND language_code = ?",
+        (BUILTIN_LEXICON_NAME, DEFAULT_LANGUAGE_CODE),
+    ).fetchone()
+    legacy_id = legacy["id"]
+    if not canonical:
+        conn.execute("UPDATE lexicons SET name = ? WHERE id = ?", (BUILTIN_LEXICON_NAME, legacy_id))
+        conn.commit()
+        return
+    canonical_id = canonical["id"]
+    conn.execute("UPDATE plans SET lexicon_id = ? WHERE lexicon_id = ?", (canonical_id, legacy_id))
+    conn.execute("DELETE FROM words WHERE lexicon_id = ?", (legacy_id,))
+    conn.execute("DELETE FROM lexicons WHERE id = ?", (legacy_id,))
+    conn.commit()
+
+
 def _seed_builtin_lexicon(conn: sqlite3.Connection, builtin_lexicon: Path) -> None:
+    if not builtin_lexicon.exists():
+        return
     if conn.execute(
         "SELECT 1 FROM lexicons WHERE name = ? AND language_code = ?",
-        ("鑰冪爺鏍稿績 50", DEFAULT_LANGUAGE_CODE),
+        (BUILTIN_LEXICON_NAME, DEFAULT_LANGUAGE_CODE),
     ).fetchone():
         return
     with builtin_lexicon.open("r", encoding="utf-8") as file:
         words = json.load(file)
-    lexicon_id = _create_lexicon(conn, "鑰冪爺鏍稿績 50", "built-in", DEFAULT_LANGUAGE_CODE)
+    lexicon_id = _create_lexicon(conn, BUILTIN_LEXICON_NAME, "built-in", DEFAULT_LANGUAGE_CODE)
     today = date.today().isoformat()
     for item in words:
         conn.execute(

@@ -37,21 +37,26 @@ class StudyRepository:
             self.conn.execute("UPDATE plans SET current_word_id = NULL WHERE id = 1")
             self.conn.commit()
         today = date.today().isoformat()
+        stats = self.conn.execute("SELECT new_seen FROM daily_stats WHERE day = ?", (today,)).fetchone()
+        new_seen_today = int(stats["new_seen"] or 0) if stats else 0
+        daily_new_limit = int(plan["daily_new"] or 0)
+        new_limit_reached = daily_new_limit > 0 and new_seen_today >= daily_new_limit
         card = self.conn.execute(
             """
             SELECT w.*, l.name AS lexicon_name
             FROM words w JOIN lexicons l ON l.id = w.lexicon_id
             WHERE w.lexicon_id = ?
               AND w.status != 'mastered'
+              AND w.next_review_date <= ?
+              AND (? = 0 OR w.seen_count > 0)
             ORDER BY
-              CASE WHEN w.next_review_date <= ? THEN 0 ELSE 1 END,
-              CASE WHEN w.repetitions = 0 THEN 1 ELSE 0 END,
+              CASE WHEN w.seen_count = 0 THEN 1 ELSE 0 END,
               w.next_review_date,
               w.seen_count,
               w.id
             LIMIT 1
             """,
-            (lexicon_id, today),
+            (lexicon_id, today, 1 if new_limit_reached else 0),
         ).fetchone()
         if card:
             self.conn.execute("UPDATE plans SET current_word_id = ? WHERE id = 1", (card["id"],))

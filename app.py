@@ -546,7 +546,7 @@ class FloatingWindow(tk.Toplevel):
         font_size = int(plan["font_size"])
         widget_size = plan["widget_size"] if "widget_size" in plan.keys() else "medium"
         width, height, wraplength = self.SIZE_PRESETS.get(widget_size, self.SIZE_PRESETS["medium"])
-        word_font_size = 48
+        word_font_size = max(30, font_size + 16)
         detail_font_size = 13
         if widget_size == "small":
             panel_padx, panel_pady = 20, 24
